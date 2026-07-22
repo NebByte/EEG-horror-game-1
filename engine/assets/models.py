@@ -20,4 +20,7 @@ class MediaAsset(BaseModel):
     params: dict = Field(default_factory=dict)
     tags: list[str] = Field(default_factory=list)
     license: str | None = None
+    # Attribution + provenance for a licensing manifest (required by CC-BY etc.).
+    attribution: str | None = None
+    source_url: str | None = None
     seed: int = 0

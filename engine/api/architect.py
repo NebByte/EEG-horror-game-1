@@ -124,3 +124,16 @@ async def post_reaction(sid: str, r: ReactionRequest) -> LearnSummary:
 @router.get("/players/{player_id}", response_model=PlayerModel)
 async def get_player(player_id: str) -> PlayerModel:
     return player_store.load(player_id)
+
+
+@router.get("/sessions/{sid}/assets/manifest")
+async def get_asset_manifest(sid: str) -> dict:
+    """The licensing/attribution manifest for the current script's assets."""
+    from engine.assets.resolver import license_manifest
+
+    sess = store.get(sid)
+    if sess is None:
+        raise HTTPException(404, "session not found")
+    if sess.script is None:
+        raise HTTPException(409, "no script yet; POST /script first")
+    return {"manifest": license_manifest(sess.script.assets)}

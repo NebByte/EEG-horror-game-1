@@ -87,8 +87,12 @@ Make the asset bank real, richer, and cheaper.
 - 🟢 **C8** **Per-run asset resolution** (`engine/assets/`): every DataPoint
   resolves to fresh, procedurally-varied media (map/model/character/image/sound/
   animation) seeded per run — different every playthrough, offline, no bloat
-- ⬜ **C9** Wire `RemoteAssetSource` to real open libraries (Poly Haven, Freesound,
-  Mixamo-style rigs) with a license/attribution manifest; cache to a local pack
+- 🟢 **C9** **Multiple open-asset libraries** (`engine/assets/libraries.py`): Poly
+  Haven (CC0, keyless), Freesound, Sketchfab, and CC0 packs, routed per asset
+  kind with procedural fallback + a licensing/attribution manifest
+  (`GET /sessions/{id}/assets/manifest`). Add on-disk caching + real downloads
+- ⬜ **C10** Live media into the browser client (fetch resolved URIs: textures,
+  audio, models) — pairs with the WebGPU renderer (workstream I)
 
 ## Workstream D — Experience / director
 Deeper, smarter real-time adaptation.

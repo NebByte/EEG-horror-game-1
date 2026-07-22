@@ -154,7 +154,20 @@ Each time you compose a Script it's a new **run**: the Architect's **escalation*
 rises (higher tension ceiling, faster beats, more intense elements), and every
 DataPoint resolves to **fresh media** (a different map layout, stalker, palette,
 sound, animation) seeded per run. Nothing heavy ships — variants are procedural
-by default (`engine/assets/`), with hooks for open-asset libraries.
+by default (`engine/assets/`).
+
+**Live Claude architect.** Set `ARCHITECT_PROVIDER=anthropic` + `ANTHROPIC_API_KEY`
+and Claude authors the Script itself (with a rationale); it degrades to the mock
+composer on any error, so the game never hard-fails. `GET /v1/health` reports the
+active `architect`.
+
+**Multiple asset libraries.** Set `ASSET_SOURCE=libraries` to resolve real media
+from open libraries — **Poly Haven** (CC0 textures/HDRIs/models, keyless),
+**Freesound** (sounds, needs `FREESOUND_API_KEY`), **Sketchfab** (models/
+animations, needs `SKETCHFAB_API_KEY`), and **CC0 packs** (Kenney / OpenGameArt).
+Each asset kind is routed to the best-configured library and **falls back to
+procedural** per asset, so a missing key or blocked network never breaks a run.
+`GET /v1/sessions/{id}/assets/manifest` returns the attribution/licensing manifest.
 
 ### Drive the API by hand
 

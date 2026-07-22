@@ -42,9 +42,14 @@ class Settings(BaseSettings):
     player_data_dir: str = "data/players"
 
     # --- Asset resolution (fresh assets every run) ---
-    # "procedural" -> infinite offline variants (default)
-    # "remote"     -> open-asset libraries when configured, else procedural
+    # "procedural" -> infinite offline variants (default, no network)
+    # "libraries"  -> open-asset libraries (Poly Haven / Freesound / Sketchfab /
+    #                 CC0 packs), each falling back to procedural per asset kind
     asset_source: str = "procedural"
+    # Which libraries to enable, in priority order (comma-separated).
+    asset_libraries: str = "polyhaven,freesound,sketchfab,cc0pack"
+    freesound_api_key: str = ""
+    sketchfab_api_key: str = ""
 
     # --- EEG signal processing ---
     eeg_sample_rate_hz: int = 256

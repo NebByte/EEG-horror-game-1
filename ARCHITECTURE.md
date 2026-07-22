@@ -107,9 +107,14 @@ characters, pictures, sounds, animations), resolved **fresh for every run**.
 - `models.py` — the `MediaAsset` contract (kind, source, uri/params, license, seed).
 - `sources.py` — `ProceduralAssetSource` synthesises an infinite space of asset
   variants from a seed (palettes, geometry/texture seeds, synth params, animation
-  clips) — offline, kkrieger-style, nothing heavy on disk. `RemoteAssetSource` is
-  the seam for open-asset libraries (Poly Haven, Freesound, Mixamo-style rigs)
-  and degrades to procedural until wired.
+  clips) — offline, kkrieger-style, nothing heavy on disk. `MultiLibrarySource`
+  routes each asset kind through several open libraries (`libraries.py`) with
+  procedural as the always-available floor.
+- `libraries.py` — real integrations: **Poly Haven** (CC0 textures/HDRIs/models,
+  keyless), **Freesound** (sounds, API token), **Sketchfab** (models/animations,
+  API token), and a curated **CC0 pack** index (Kenney / OpenGameArt). Each parses
+  its API into a `MediaAsset` (pure, unit-tested `_parse_*`) with license +
+  attribution for the manifest (`GET /sessions/{id}/assets/manifest`).
 - `resolver.py` — seeds each asset from `(run_seed, datapoint_id, kind)`, so a run
   is internally consistent but different from every other run.
 

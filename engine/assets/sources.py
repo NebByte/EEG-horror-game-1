@@ -51,7 +51,8 @@ class ProceduralAssetSource(AssetSource):
         intensity = min(1.0, 0.3 + 0.5 * escalation + 0.2 * rng.random())
 
         base = dict(id=f"{kind}_{seed & 0xffffff:06x}", kind=kind, source="procedural",
-                    tags=list(tags), license="generated (CC0-equivalent)", seed=seed)
+                    tags=list(tags), license="generated (CC0-equivalent)",
+                    attribution="procedural (synthesised)", seed=seed)
 
         if kind == "map":
             params = {"layout": pick(_MAP_LAYOUTS), "palette": pal, "geometry_seed": rng.randrange(1 << 30),
@@ -84,37 +85,57 @@ class ProceduralAssetSource(AssetSource):
         return MediaAsset(name=name, params=params, **base)
 
 
-class RemoteAssetSource(AssetSource):
-    """Fetch from configured open-asset libraries (Poly Haven, Freesound, etc.).
-
-    Falls back to procedural per asset until a library integration is wired.
-    Structured so a real integration is a drop-in: implement `_query(...)`.
+class MultiLibrarySource(AssetSource):
+    """Route each asset kind through several open-asset libraries in priority
+    order; the first library that returns a hit wins, otherwise fall back to the
+    procedural source. This is "multiple asset libraries" working together —
+    Poly Haven for textures/models, Freesound for audio, Sketchfab for models/
+    animations, CC0 packs as a floor — with procedural as the always-available net.
     """
 
-    name = "remote"
+    name = "libraries"
 
-    def __init__(self) -> None:
-        self.settings = get_settings()
+    def __init__(self, libraries: list) -> None:
+        self.libraries = libraries
         self._fallback = ProceduralAssetSource()
 
-    def _query(self, kind: AssetKind, mood: str, tags: list[str], fears: list[str]) -> MediaAsset | None:
-        # No library configured yet -> signal "use fallback".
-        return None
-
     def fetch(self, kind, seed, mood, tags, fears, escalation) -> MediaAsset:
-        try:
-            got = self._query(kind, mood, tags, fears)
+        for lib in self.libraries:
+            try:
+                got = lib.query(kind, seed, mood, tags, fears, escalation)
+            except Exception as exc:  # noqa: BLE001 — never break a run on a library
+                log.info("library %s failed (%s)", getattr(lib, "name", "?"), exc)
+                got = None
             if got is not None:
                 return got
-        except Exception as exc:  # noqa: BLE001 — never break a run on a fetch error
-            log.warning("Remote asset fetch failed (%s); using procedural.", exc)
         return self._fallback.fetch(kind, seed, mood, tags, fears, escalation)
 
 
+def build_libraries(settings) -> list:
+    """Instantiate the enabled libraries in priority order from config."""
+    from engine.assets.libraries import (Cc0PackLibrary, FreesoundLibrary,
+                                         PolyHavenLibrary, SketchfabLibrary)
+
+    libs = []
+    for name in [s.strip() for s in settings.asset_libraries.split(",") if s.strip()]:
+        if name == "polyhaven":
+            libs.append(PolyHavenLibrary())
+        elif name == "freesound" and settings.freesound_api_key:
+            libs.append(FreesoundLibrary(settings.freesound_api_key))
+        elif name == "sketchfab" and settings.sketchfab_api_key:
+            libs.append(SketchfabLibrary(settings.sketchfab_api_key))
+        elif name == "cc0pack":
+            libs.append(Cc0PackLibrary())
+    return libs
+
+
 def get_asset_source() -> AssetSource:
-    if get_settings().asset_source == "remote":
+    settings = get_settings()
+    if settings.asset_source in ("libraries", "remote"):
         try:
-            return RemoteAssetSource()
+            libs = build_libraries(settings)
+            if libs:
+                return MultiLibrarySource(libs)
         except Exception as exc:  # noqa: BLE001
-            log.warning("Remote asset source unavailable (%s); using procedural.", exc)
+            log.warning("Asset libraries unavailable (%s); using procedural.", exc)
     return ProceduralAssetSource()

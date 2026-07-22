@@ -66,3 +66,22 @@ def resolve_script_assets(script, run_seed: int, escalation: float,
                           source: AssetSource | None = None,
                           catalog: list[DataPoint] | None = None) -> dict[str, list[MediaAsset]]:
     return AssetResolver(source).resolve_script(script, run_seed, escalation, catalog)
+
+
+def license_manifest(assets: dict[str, list]) -> list[dict]:
+    """A dedup'd attribution/licensing manifest for a run's resolved assets.
+
+    Accepts either MediaAsset objects or their dumped dicts (as stored on a
+    Script). Only non-procedural, real-media assets need attribution."""
+    seen: dict[str, dict] = {}
+    for media in assets.values():
+        for a in media:
+            d = a if isinstance(a, dict) else a.model_dump()
+            if d.get("source") == "procedural":
+                continue
+            key = d.get("source_url") or d.get("id")
+            if key and key not in seen:
+                seen[key] = {"name": d.get("name"), "kind": d.get("kind"),
+                             "source": d.get("source"), "license": d.get("license"),
+                             "attribution": d.get("attribution"), "source_url": d.get("source_url")}
+    return list(seen.values())

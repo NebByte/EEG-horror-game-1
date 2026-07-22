@@ -9,5 +9,11 @@ websockets>=12.0
 # Signal processing
 numpy>=1.26
 
+# HTTP client (device gateway + open-asset libraries; degraded if absent)
+httpx>=0.27
+
+# --- Optional: live Claude architect (ARCHITECT_PROVIDER=anthropic) ---
+# pip install anthropic>=0.117
+
 # Google Cloud generative backend (optional; only needed for ASSET_PROVIDER=vertex)
 # Install with: pip install -r requirements-vertex.txt
