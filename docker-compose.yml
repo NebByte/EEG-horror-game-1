@@ -1,0 +1,14 @@
+services:
+  engine:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - ASSET_PROVIDER=${ASSET_PROVIDER:-mock}
+      - GCP_PROJECT=${GCP_PROJECT:-}
+      - GCP_LOCATION=${GCP_LOCATION:-us-central1}
+    # To use Vertex, mount a service-account key and point ADC at it:
+    # volumes:
+    #   - ./service-account.json:/secrets/sa.json:ro
+    # environment:
+    #   - GOOGLE_APPLICATION_CREDENTIALS=/secrets/sa.json

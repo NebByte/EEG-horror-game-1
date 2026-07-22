@@ -1,0 +1,6 @@
+# Optional: the Claude "architect" that composes the Script from data points.
+# Only needed when ARCHITECT_PROVIDER=anthropic or =vertex.
+-r requirements.txt
+anthropic>=0.40
+# For ARCHITECT_PROVIDER=vertex (Claude on the user's GCP project):
+#   pip install "anthropic[vertex]"

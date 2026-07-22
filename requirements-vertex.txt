@@ -1,0 +1,7 @@
+# Optional Google Cloud generative backend.
+# Only needed when ASSET_PROVIDER=vertex.
+-r requirements.txt
+# Current, supported SDK for Gemini + Imagen on Vertex (replaces the
+# deprecated vertexai.generative_models SDK).
+google-genai>=1.0
+google-cloud-storage>=2.16

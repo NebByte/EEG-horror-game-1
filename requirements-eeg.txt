@@ -1,0 +1,12 @@
+# Optional real-headset EEG ingestion dependencies.
+# Install only the adapter you need.
+-r requirements.txt
+
+# Serial / USB boards (SerialSource)
+pyserial>=3.5
+
+# Lab Streaming Layer — Muse, OpenBCI, Emotiv bridges, BrainFlow (LSLSource)
+pylsl>=1.16
+
+# Bluetooth Low Energy headsets (BLESource)
+bleak>=0.21
