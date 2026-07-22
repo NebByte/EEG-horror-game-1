@@ -100,7 +100,10 @@ python run.py          # Windows / macOS / Linux
 
 Then move with **WASD / arrows**, look with the **mouse**, and drag the **fear
 slider** (or tick *Auto-escalate*) to watch the world turn from *unease* to
-*panic*. Switch the dock to **Live engine** to drive it from real streamed EEG.
+*panic*. Switch the dock to **Live engine** to drive it from real streamed EEG,
+and optionally tick **Webcam affect** to fuse a webcam motion/startle signal with
+the EEG (processed locally — only the derived affect numbers are sent). The
+Director HUD shows live **signal quality** (blink / EMG / motion / poor-signal).
 
 Prefer the pieces on their own:
 

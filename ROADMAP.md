@@ -40,21 +40,29 @@ Turn real headset data into clean `EEGChunk`s.
   poor-signal surfaced (`engine/eeg/sources.py`). Verify against real hardware;
   add LSL / Muse / OpenBCI / Emotiv adapters behind the same interface
 - 🟢 **A2** Client-side device gateway streams to the WS `/stream` (`engine/eeg/gateway.py`)
-- 🟡 **A3** Signal quality: MindLink poor-signal gating in place; add impedance
-  check, dropout detection, and per-window rejection
-- ⬜ **A4** Artifact rejection (eye blinks / EMG / motion) before band-power extraction
-- ⬜ **A5** Replace FFT periodogram with Welch + proper windowing/overlap
+- 🟡 **A3** Signal quality: MindLink poor-signal gating + per-window confidence in
+  place (`engine/eeg/artifacts.py`), surfaced in the game HUD; add impedance +
+  dropout detection
+- 🟢 **A4** Artifact rejection (blink / EMG / motion) with confidence gating — the
+  director holds on low-confidence windows instead of reacting to noise
+- 🟢 **A5** Welch PSD with Hann windowing + overlap (`engine/eeg/bands.py`)
 - ⬜ **A6** Timestamp sync & jitter handling across channels
 
 ## Workstream B — Affect model
 Move from heuristics to a validated model behind the same `EEGChunk → AffectState` interface.
 
-- ⬜ **B1** Calibration routine per player (baseline eyes-open/closed, resting FAA)
+- 🟡 **B1** Calibration: resting-baseline capture + affect re-centering
+  (`engine/eeg/calibration.py`, `POST /sessions/{id}/calibrate`); add the guided
+  eyes-open/closed protocol UI
 - ⬜ **B2** Data collection protocol + labelling (self-report + stimulus tags) with consent
 - ⬜ **B3** Train a classifier/regressor (arousal/valence → fear/stress), validate against heuristics
 - ⬜ **B4** Serve it on a Vertex AI Endpoint; wire behind `infer_affect` as a strategy
 - ⬜ **B5** Online personalization / drift correction during a session
-- ⬜ **B6** Confidence-aware fusion (ignore low-SNR windows in the director)
+- 🟢 **B6** Confidence-aware fusion — low-confidence (artifact/poor-signal)
+  windows don't move the director
+- 🟡 **B7** Multimodal fusion: computer-vision (webcam) affect fused with EEG
+  (`fuse_cv`, `CvAffect`); browser sends a motion/startle proxy now — swap in a
+  real facial-expression model next
 
 ## Workstream C — Generative assets
 Make the asset bank real, richer, and cheaper.

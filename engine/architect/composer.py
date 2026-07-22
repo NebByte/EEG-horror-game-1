@@ -131,8 +131,11 @@ class AnthropicComposer(MockComposer):
 
     name = "anthropic"
 
-    def __init__(self) -> None:
+    def __init__(self, client=None) -> None:  # noqa: ANN001 — client injectable for tests
         self.settings = get_settings()
+        if client is not None:
+            self._client = client
+            return
         try:
             import anthropic  # noqa: F401
         except ImportError as exc:

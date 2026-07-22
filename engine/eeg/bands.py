@@ -28,14 +28,45 @@ def _chunk_to_matrix(chunk: EEGChunk) -> np.ndarray:
     return np.asarray(rows, dtype=float).T  # channels on axis 0
 
 
-def _relative_band_powers(signal: np.ndarray, fs: float) -> dict[str, float]:
+def _periodogram(signal: np.ndarray, fs: float) -> tuple[np.ndarray, np.ndarray]:
+    n = signal.shape[-1]
+    freqs = np.fft.rfftfreq(n, d=1.0 / fs)
+    psd = np.abs(np.fft.rfft(signal, axis=-1)) ** 2
+    psd = psd.mean(axis=0) if psd.ndim > 1 else psd
+    return freqs, psd
+
+
+def _welch_psd(signal: np.ndarray, fs: float, seg: int | None = None,
+               overlap: float = 0.5) -> tuple[np.ndarray, np.ndarray]:
+    """Welch's method: average periodograms over overlapping Hann-windowed
+    segments. Lower variance than a single periodogram — better for real signals.
+    Falls back to a plain periodogram when the window is too short to segment."""
+    n = signal.shape[-1]
+    seg = seg or int(fs)  # ~1s segments by default
+    if n < 2 * seg:
+        return _periodogram(signal, fs)
+    step = max(1, int(seg * (1.0 - overlap)))
+    win = np.hanning(seg)
+    win_norm = (win ** 2).sum()
+    starts = range(0, n - seg + 1, step)
+    acc = None
+    count = 0
+    for s in starts:
+        segw = signal[..., s : s + seg] * win
+        spec = np.abs(np.fft.rfft(segw, axis=-1)) ** 2 / win_norm
+        spec = spec.mean(axis=0) if spec.ndim > 1 else spec
+        acc = spec if acc is None else acc + spec
+        count += 1
+    freqs = np.fft.rfftfreq(seg, d=1.0 / fs)
+    return freqs, (acc / max(1, count))
+
+
+def _relative_band_powers(signal: np.ndarray, fs: float, method: str = "welch") -> dict[str, float]:
     n = signal.shape[-1]
     if n < 2:
         return {b: 0.0 for b in BANDS}
     signal = signal - signal.mean(axis=-1, keepdims=True)
-    freqs = np.fft.rfftfreq(n, d=1.0 / fs)
-    psd = np.abs(np.fft.rfft(signal, axis=-1)) ** 2  # (channels, freqs)
-    psd = psd.mean(axis=0) if psd.ndim > 1 else psd    # average across channels
+    freqs, psd = (_welch_psd if method == "welch" else _periodogram)(signal, fs)
 
     total = psd[(freqs >= 0.5) & (freqs <= 45.0)].sum()
     if total <= 0:

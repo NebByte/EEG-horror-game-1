@@ -32,6 +32,7 @@ class Session:
     beat_index: int = 0
     bank: AssetBank | None = None
     generating: bool = False
+    baseline: AffectState | None = None  # per-player resting calibration
     history: deque = field(default_factory=lambda: deque(maxlen=_HISTORY))
     last_affect: AffectState | None = None
     last_directive: Directive | None = None

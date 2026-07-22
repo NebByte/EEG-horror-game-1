@@ -118,6 +118,15 @@ unit-tested parser (raw wave, poor-signal, attention/meditation, ASIC band
 powers). Being single-channel, it can't compute frontal alpha asymmetry, so
 valence falls back to neutral and fear is driven by arousal + stress + bands.
 
+Around the raw signal: `bands.py` uses **Welch PSD** (Hann windows + overlap) for
+lower-variance band powers; `artifacts.py` flags blink / EMG / motion and turns
+poor-signal into a per-window **confidence** (the director holds on low-confidence
+windows instead of reacting to noise); `calibration.py` records a resting baseline
+so affect is centered on *this* player. `affect.fuse_cv()` fuses an optional
+**computer-vision (webcam) affect** as a second modality — the browser computes a
+motion/startle proxy locally (only the derived numbers are sent), ready to swap
+for a real facial-expression model.
+
 ### `engine/experience/` — the director
 - `orchestrator.py` — the core creative logic. Given `AffectState` + the
   `AssetBank`, it:

@@ -58,6 +58,30 @@ class AffectState(BaseModel):
     valence: float = 0.0  # -1 withdrawal ... +1 approach
 
 
+class CvAffect(BaseModel):
+    """Computer-vision (webcam) affect estimate, fused with the EEG affect.
+
+    A second modality: facial expression / motion. `confidence` gates how much
+    it's trusted (0 = ignore, e.g. no face detected)."""
+
+    arousal: float = 0.0        # 0..1 (e.g. motion energy / expressiveness)
+    valence: float = 0.0        # -1..1 (negative = distress)
+    surprise: float = 0.0       # 0..1 (startle spikes)
+    fear: float = 0.0           # 0..1 (fear expression)
+    confidence: float = 0.0     # 0..1 how much to trust this frame
+
+
+class SignalQuality(BaseModel):
+    """Per-window signal health, from the MindLink poor-signal + artifact checks."""
+
+    poor_signal: int = 0        # 0 good .. 200 off-head (MindLink scale)
+    ok: bool = True
+    blink: bool = False
+    emg: bool = False
+    motion: bool = False
+    confidence: float = 1.0     # 0..1 usable weight for this window
+
+
 # --------------------------------------------------------------------------- #
 # Generative assets
 # --------------------------------------------------------------------------- #

@@ -387,6 +387,11 @@
       let r = await fetch(engine.url + "/v1/sessions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed, player_id: engine.playerId }) });
       engine.sid = (await r.json()).id;
       await fetch(engine.url + "/v1/sessions/" + engine.sid + "/generate", { method: "POST" });
+      // quick resting calibration so affect is centered on this player
+      try {
+        const rest = [bandsForArousal(0.15, 0.3), bandsForArousal(0.12, 0.35), bandsForArousal(0.18, 0.25)];
+        await fetch(engine.url + "/v1/sessions/" + engine.sid + "/calibrate", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ chunks: rest }) });
+      } catch (e) {}
       // compose the personalized Script (the Architect authors the game)
       r = await fetch(engine.url + "/v1/sessions/" + engine.sid + "/script", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ length: 8 }) });
       engine.script = await r.json(); engine.beat = 0; engine.beatT = 0;
@@ -397,7 +402,7 @@
       const wsUrl = engine.url.replace(/^http/, "ws") + "/v1/sessions/" + engine.sid + "/stream";
       const ws = new WebSocket(wsUrl); engine.ws = ws;
       ws.onopen = () => { engine.connected = true; setConn(true, "live · " + engine.playerId); pumpEEG(); };
-      ws.onmessage = (ev) => { const m = JSON.parse(ev.data); if (m.affect) Object.assign(affect, m.affect); if (m.directive) applyDirective(m.directive); };
+      ws.onmessage = (ev) => { const m = JSON.parse(ev.data); if (m.affect) Object.assign(affect, m.affect); if (m.directive) applyDirective(m.directive); if (m.quality) scene.quality = m.quality; };
       ws.onclose = () => { engine.connected = false; if (mode === "live") setConn(false, "engine offline — local"); };
       ws.onerror = () => {};
     } catch (e) {
@@ -408,7 +413,11 @@
     clearInterval(engine.timer);
     engine.timer = setInterval(() => {
       if (!engine.connected || !engine.ws || engine.ws.readyState !== 1) return;
-      engine.ws.send(JSON.stringify(bandsForArousal(Math.max(fearSlider(), affect.arousal), affect.valence)));
+      // EEG window (synthetic), plus optional fused webcam affect + signal quality.
+      const frame = bandsForArousal(Math.max(fearSlider(), affect.arousal), affect.valence);
+      if (cv.on && cv.conf > 0) frame.cv = { arousal: cv.arousal, valence: cv.valence, surprise: cv.surprise, fear: cv.fear, confidence: cv.conf };
+      frame.poor_signal = cv.on ? 0 : 0; // MindLink would report real contact quality here
+      engine.ws.send(JSON.stringify(frame));
     }, 500);
   }
   function disconnectEngine() { clearInterval(engine.timer); if (engine.ws) { try { engine.ws.close(); } catch (e) {} } engine.ws = null; engine.connected = false; engine.script = null; }
@@ -466,7 +475,45 @@
     // lighting tint
     const lightDp = beat.datapoint_ids.find((d) => d.startsWith("lighting."));
     scene.lightColor = lightDp && lightDp.includes("strobe") ? [210, 60, 50] : lightDp && lightDp.includes("backlight") ? [90, 40, 40] : null;
+    // this run's image asset (used for scare flashes) + ambient sound
+    const imgDp = beat.datapoint_ids.find((d) => d.startsWith("prop.")) || beat.datapoint_ids.find((d) => d.startsWith("encounter."));
+    scene.imageAsset = imgDp ? asset(script, imgDp, "image") : null;
+    applyBeatAudio(script, beat);
     updateArchitectHUD();
+  }
+
+  // A brief full-screen scare drawn procedurally from this run's image asset
+  // (motif: eyes / face / figure / static). Fired on a stinger.
+  let flash = 0, flashMotif = "static", flashSeed = 1;
+  function triggerScare() {
+    const a = scene.imageAsset;
+    flashMotif = (a && a.params.motif) || (["eye", "face", "figure", "static"][Math.random() * 4 | 0]);
+    flashSeed = (a && a.params.noise_seed) || (Math.random() * 1e9 | 0);
+    flash = 1;
+  }
+  function drawScare() {
+    if (flash <= 0) return;
+    const a = flash;
+    ctx.save();
+    if (flashMotif === "static") {
+      ctx.globalAlpha = a * 0.5; drawGrain();
+    } else {
+      ctx.globalAlpha = a * 0.85; ctx.fillStyle = "#120000"; ctx.fillRect(0, 0, W, H);
+      ctx.fillStyle = `rgba(200,30,20,${a})`;
+      const cx = W / 2, cy = H / 2;
+      if (flashMotif === "eye" || flashMotif === "face") {
+        const e = W * 0.06;
+        ctx.beginPath(); ctx.ellipse(cx - W * 0.12, cy, e, e * 0.6, 0, 0, 7); ctx.ellipse(cx + W * 0.12, cy, e, e * 0.6, 0, 0, 7); ctx.fill();
+        ctx.fillStyle = `rgba(255,240,230,${a})`;
+        ctx.beginPath(); ctx.arc(cx - W * 0.12, cy, e * 0.22, 0, 7); ctx.arc(cx + W * 0.12, cy, e * 0.22, 0, 7); ctx.fill();
+        if (flashMotif === "face") { ctx.strokeStyle = `rgba(160,20,15,${a})`; ctx.lineWidth = 3; ctx.beginPath(); ctx.arc(cx, cy + H * 0.18, W * 0.10, 0.1, Math.PI - 0.1); ctx.stroke(); }
+      } else { // figure
+        ctx.fillRect(cx - W * 0.04, cy - H * 0.28, W * 0.08, H * 0.6);
+        ctx.beginPath(); ctx.arc(cx, cy - H * 0.28, W * 0.05, 0, 7); ctx.fill();
+      }
+    }
+    ctx.restore();
+    flash = Math.max(0, flash - 0.06);
   }
 
   function advanceScript(dt) {
@@ -497,6 +544,7 @@
       affect_before: { fear: before.fear, arousal: before.arousal },
       affect_peak: { fear: affect.fear, arousal: affect.arousal },
     };
+    if (cv.on && cv.conf > 0) body.cv_affect = { arousal: cv.arousal, valence: cv.valence, surprise: cv.surprise, fear: cv.fear, confidence: cv.conf };
     fetch(engine.url + "/v1/sessions/" + engine.sid + "/reactions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
       .then((r) => r.json()).then((s) => { showLearnPulse(); setLearning(s.reactions_seen, s.top_datapoints); }).catch(() => {});
   }
@@ -506,16 +554,90 @@
       .then((p) => setLearning(p.reactions_seen, Object.entries(p.datapoint_scores || {}).sort((a, b) => b[1] - a[1]).slice(0, 3))).catch(() => {});
   }
 
+  // ------------------------------------------------------- webcam CV affect -
+  // A second modality fused with EEG. No heavy models (keeps it offline): a
+  // motion/startle proxy from the webcam. `surprise` spikes on sudden movement
+  // (a flinch); `arousal` tracks sustained motion. Structured so a real facial-
+  // expression model is a drop-in later. Everything is local — no frames leave
+  // the browser; only the derived affect numbers are sent.
+  const cv = { on: false, arousal: 0, valence: 0, surprise: 0, fear: 0, conf: 0,
+               video: null, cvs: null, cctx: null, prev: null, ema: 0, stream: null, timer: 0 };
+  async function enableWebcam() {
+    if (cv.on) return;
+    try {
+      cv.stream = await navigator.mediaDevices.getUserMedia({ video: { width: 160, height: 120 }, audio: false });
+    } catch (e) { document.getElementById("webcam").checked = false; document.getElementById("cam-t").textContent = "(no camera)"; return; }
+    cv.video = document.createElement("video"); cv.video.autoplay = true; cv.video.playsInline = true; cv.video.muted = true; cv.video.srcObject = cv.stream;
+    cv.cvs = document.createElement("canvas"); cv.cvs.width = 48; cv.cvs.height = 36; cv.cctx = cv.cvs.getContext("2d");
+    cv.on = true; document.getElementById("cam-t").textContent = "(on)";
+    cv.timer = setInterval(processCv, 150);
+  }
+  function disableWebcam() {
+    cv.on = false; clearInterval(cv.timer);
+    if (cv.stream) cv.stream.getTracks().forEach((t) => t.stop());
+    cv.stream = null; cv.video = null; cv.prev = null; cv.conf = 0; cv.surprise = 0; cv.arousal = 0;
+    document.getElementById("cam-t").textContent = "";
+  }
+  function processCv() {
+    if (!cv.on || !cv.video || cv.video.readyState < 2) return;
+    const w = cv.cvs.width, h = cv.cvs.height;
+    cv.cctx.drawImage(cv.video, 0, 0, w, h);
+    const d = cv.cctx.getImageData(0, 0, w, h).data;
+    let bright = 0, motion = 0;
+    const cur = new Float32Array(w * h);
+    for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+      const lum = (d[i] * 0.3 + d[i + 1] * 0.59 + d[i + 2] * 0.11);
+      cur[p] = lum; bright += lum;
+      if (cv.prev) motion += Math.abs(lum - cv.prev[p]);
+    }
+    bright /= (w * h); motion /= (w * h * 255);
+    cv.prev = cur;
+    cv.ema = cv.ema * 0.8 + motion * 0.2;
+    cv.arousal = clamp(motion * 6);
+    cv.surprise = clamp((motion - cv.ema) * 14);       // a sudden flinch
+    cv.fear = clamp(0.6 * cv.surprise + 0.3 * cv.arousal);
+    cv.valence = -clamp(cv.arousal * 0.6);             // crude: agitation reads negative
+    cv.conf = bright > 12 ? clamp(0.35 + bright / 255 * 0.5) : 0.0;  // dark frame => no signal
+  }
+
   // ------------------------------------------------------------------ audio -
-  let AC = null, master = null, droneGain = null, lastBeat = 0;
+  // A reconfigurable ambient bed (two oscillators + filtered noise) whose timbre
+  // is set from this run's resolved *sound* asset, so each run sounds different.
+  let AC = null, master = null, lastBeat = 0;
+  const amb = { o1: null, o2: null, noise: null, filt: null, gain: null, noiseGain: null, synth: null };
   function initAudio() {
     if (AC) return; AC = new (window.AudioContext || window.webkitAudioContext)();
     master = AC.createGain(); master.gain.value = 0.6; master.connect(AC.destination);
-    const o1 = AC.createOscillator(); o1.type = "sawtooth"; o1.frequency.value = 55;
-    const o2 = AC.createOscillator(); o2.type = "sine"; o2.frequency.value = 41.2;
-    droneGain = AC.createGain(); droneGain.gain.value = 0.05;
-    const lp = AC.createBiquadFilter(); lp.type = "lowpass"; lp.frequency.value = 220;
-    o1.connect(lp); o2.connect(lp); lp.connect(droneGain); droneGain.connect(master); o1.start(); o2.start();
+    amb.gain = AC.createGain(); amb.gain.value = 0.06; amb.gain.connect(master);
+    amb.filt = AC.createBiquadFilter(); amb.filt.type = "lowpass"; amb.filt.frequency.value = 220; amb.filt.connect(amb.gain);
+    amb.o1 = AC.createOscillator(); amb.o1.type = "sawtooth"; amb.o1.frequency.value = 55; amb.o1.connect(amb.filt); amb.o1.start();
+    amb.o2 = AC.createOscillator(); amb.o2.type = "sine"; amb.o2.frequency.value = 41.2; amb.o2.connect(amb.filt); amb.o2.start();
+    // Looping white-noise source for wind / breath / choir textures.
+    const buf = AC.createBuffer(1, AC.sampleRate * 2, AC.sampleRate);
+    const data = buf.getChannelData(0); for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+    amb.noise = AC.createBufferSource(); amb.noise.buffer = buf; amb.noise.loop = true;
+    amb.noiseGain = AC.createGain(); amb.noiseGain.value = 0.0; amb.noise.connect(amb.noiseGain); amb.noiseGain.connect(amb.filt); amb.noise.start();
+  }
+  // Retune the ambient bed from a resolved sound asset's params.
+  function setAmbient(p) {
+    if (!AC || !p) return;
+    const t = AC.currentTime, ramp = (n, v) => { try { n.setTargetAtTime(v, t, 0.6); } catch (e) { n.value = v; } };
+    amb.synth = p.synth;
+    const hz = Math.max(30, Math.min(240, p.hz || 55));
+    ramp(amb.o1.frequency, hz); ramp(amb.o2.frequency, hz * 0.75);
+    // Waveform + noise level per synth flavour.
+    const noisy = { wind: 0.10, choir: 0.06, whisper: 0.05, scuttle: 0.04, metal: 0.03 }[p.synth] || 0.0;
+    amb.o1.type = p.synth === "metal" ? "square" : p.synth === "choir" ? "triangle" : "sawtooth";
+    ramp(amb.filt.frequency, p.synth === "wind" || p.synth === "whisper" ? 900 : 220 + (p.mod || 0) * 400);
+    ramp(amb.noiseGain, noisy);
+  }
+  let lastAmbient = null;
+  function applyBeatAudio(script, beat) {
+    if (!AC || !script || !beat) return;
+    const audDp = beat.datapoint_ids.find((d) => d.startsWith("audio."));
+    const sa = audDp ? asset(script, audDp, "sound") : null;
+    const key = sa ? sa.id : null;
+    if (sa && key !== lastAmbient) { lastAmbient = key; setAmbient(sa.params); }
   }
   function heartbeat(now) {
     if (!AC) return; const interval = 60 / Math.max(40, scene.bpm); if (now - lastBeat < interval) return; lastBeat = now;
@@ -525,11 +647,13 @@
     o.start(t); o.stop(t + 0.25);
   }
   function stinger() {
-    if (!AC || !scene.stinger) return; scene.stinger = false; const t = AC.currentTime;
+    if (!scene.stinger) return; scene.stinger = false;
+    triggerScare();
+    if (!AC) return; const t = AC.currentTime;
     const o = AC.createOscillator(); o.type = "sawtooth"; o.frequency.setValueAtTime(880, t); o.frequency.exponentialRampToValueAtTime(140, t + 0.5);
     const g = AC.createGain(); g.gain.setValueAtTime(0.28, t); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.6); o.connect(g); g.connect(master); o.start(t); o.stop(t + 0.6);
   }
-  function updateAudio() { if (AC) droneGain.gain.value = 0.03 + scene.intensity * 0.10; }
+  function updateAudio() { if (AC) amb.gain.gain.value = 0.04 + scene.intensity * 0.11; }
 
   // -------------------------------------------------------------------- HUD --
   function fearSlider() { return (+document.getElementById("fear").value) / 100; }
@@ -543,6 +667,11 @@
     document.getElementById("s-bpm").textContent = scene.bpm.toFixed(0);
     document.getElementById("s-space").textContent = scene.spaceType;
     document.getElementById("s-chr").textContent = monster.active && scene.encounter ? scene.encounter.name : "—";
+    // Signal quality (from the engine's artifact/poor-signal gate) + webcam.
+    const q = scene.quality;
+    let sig = mode === "live" && q ? (q.motion ? "motion" : q.blink ? "blink" : q.emg ? "EMG" : q.ok ? "good" : "poor") + " " + (q.confidence * 100 | 0) + "%" : "—";
+    if (cv.on) sig += " · cam" + (cv.conf > 0 ? " " + (cv.conf * 100 | 0) + "%" : " ✕");
+    document.getElementById("s-sig").textContent = sig;
     document.getElementById("backoff").classList.toggle("on", scene.backoff);
   }
   function updateArchitectHUD() {
@@ -583,8 +712,16 @@
     if (mode === "local") localTick(dt, fearSlider(), document.getElementById("auto").checked);
     else advanceScript(dt);
 
+    // Fuse webcam affect locally too (so it works in standalone mode): a flinch
+    // spikes fear/arousal on top of the sim/engine affect.
+    if (cv.on && cv.conf > 0) {
+      const w = 0.4 * cv.conf;
+      affect.arousal = clamp(affect.arousal + (cv.arousal - affect.arousal) * w + 0.2 * cv.surprise);
+      affect.fear = clamp(affect.fear + 0.5 * w * cv.fear + 0.15 * cv.surprise);
+    }
+
     flickerLevel = 1 - (Math.random() < scene.flicker * 0.25 ? Math.random() * scene.flicker * 0.7 : 0);
-    stepMovement(dt); stepMonster(dt); renderWorld();
+    stepMovement(dt); stepMonster(dt); renderWorld(); drawScare();
     heartbeat(now); stinger(); updateAudio();
     trackReaction(now); updateHUD(); updateBeatProgress();
     if (pulseT && now - pulseT > 0.6) { document.getElementById("l-pulse").classList.remove("on"); pulseT = 0; }
@@ -609,6 +746,7 @@
   document.getElementById("m-local").onclick = () => { mode = "local"; disconnectEngine(); currentSpace = null; rebuildLevel("corridor", "local"); setConn(false, "local simulation"); syncModeButtons(); };
   document.getElementById("m-live").onclick = () => { mode = "live"; syncModeButtons(); connectEngine(document.getElementById("engineUrl").value); };
   document.getElementById("engineUrl").addEventListener("change", (e) => { if (mode === "live") connectEngine(e.target.value); });
+  document.getElementById("webcam").addEventListener("change", (e) => { e.target.checked ? enableWebcam() : disableWebcam(); });
   if (location.protocol.startsWith("http")) document.getElementById("engineUrl").value = location.origin;
 
   document.getElementById("go").onclick = () => { initAudio(); if (AC && AC.state === "suspended") AC.resume(); document.getElementById("start").style.display = "none"; canvas.requestPointerLock && canvas.requestPointerLock(); };
