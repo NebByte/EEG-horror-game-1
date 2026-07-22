@@ -24,9 +24,11 @@ Check items off as you go.
   Claude/mock composer that authors a personalized **Script** (the level+event
   graph), plus a learning layer that updates a persisted per-player model from
   reactions. API: `GET /sessions/{id}/script`, `POST /sessions/{id}/reactions`
-- 🟡 **DX12 runtime scaffold** (`runtime/`): CMake+vcpkg project; a client that
-  composes a Script and prints the authored level (protocol proven). Renderer
-  (DirectX 12 + glTF/Draco + ozz + XAudio2) is the next build-out
+- 🟢 **Browser/WebGL game client** (`web/`): a first-person raycasting horror
+  renderer in pure HTML5 canvas + WebAudio — no engine, no build, cross-platform.
+  Consumes directives live over WebSocket (or runs standalone on a JS affect sim).
+  **This replaces the abandoned DirectX 12 native runtime** (`runtime/`), which
+  was Windows-only, required a C++/CMake/vcpkg toolchain, and never built cleanly.
 
 ---
 
@@ -95,10 +97,14 @@ Production-grade service.
 ## Workstream F — Game client integration
 Close the loop with an actual game.
 
-- ⬜ **F1** Reference Unity (or Unreal) client: consume `Directive`, resolve assets by URI/id
-- ⬜ **F2** Asset resolver: download/stream sounds, spawn characters, apply map mutations
-- ⬜ **F3** In-game debug overlay (live affect + directive + safety state)
-- ⬜ **F4** Latency budget & smoothing on the client side
+- 🟢 **F1** Reference **web/WebGL client**: consumes `Directive` live over the
+  WebSocket `/stream` (replaces the DirectX runtime; Unity/Unreal still optional)
+- 🟡 **F2** Asset resolver: the web client maps directives to walls/fog/stalker/
+  heartbeat now; downloading real generated media (Imagen art, Lyria audio) by
+  `Asset.uri` is the remaining piece
+- 🟢 **F3** In-game debug overlay (live affect + directive + safety state HUD)
+- 🟡 **F4** Latency budget & smoothing (director already smooths intensity;
+  client-side interpolation/prediction still to add)
 
 ## Workstream G — Safety, ethics & compliance
 Non-negotiable before real users.

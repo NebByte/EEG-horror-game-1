@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>EEG Horror Engine — WebGL Client</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='13' font-size='13'%3E%F0%9F%A7%A0%3C/text%3E%3C/svg%3E" />
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: #000; overflow: hidden;
+    font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; color: #cdd3da; }
+  #stage { position: fixed; inset: 0; }
+  canvas { display: block; width: 100%; height: 100%; image-rendering: pixelated; cursor: none; }
+
+  /* HUD */
+  #hud { position: fixed; inset: 0; pointer-events: none; }
+  .panel { position: absolute; background: rgba(8,10,13,.72); border: 1px solid #22282f;
+    border-radius: 10px; padding: 12px 14px; backdrop-filter: blur(4px); }
+  #affect { top: 14px; left: 14px; width: 232px; }
+  #affect h2, #status h2 { margin: 0 0 8px; font-size: 11px; letter-spacing: .16em;
+    text-transform: uppercase; color: #7c8894; font-weight: 600; }
+  .meter { margin: 7px 0; }
+  .meter label { display: flex; justify-content: space-between; font-size: 11px;
+    margin-bottom: 3px; color: #aab3bd; }
+  .meter .bar { height: 7px; background: #1a1f26; border-radius: 4px; overflow: hidden; }
+  .meter .fill { height: 100%; width: 0%; border-radius: 4px;
+    transition: width .25s ease, background .25s ease; background: #4a90d9; }
+  #status { top: 14px; right: 14px; width: 210px; text-align: right; }
+  #status .row { font-size: 12px; margin: 4px 0; display: flex; justify-content: space-between; }
+  #status .row b { color: #e6ebf0; font-weight: 600; }
+  #mood { font-size: 20px; letter-spacing: .08em; text-transform: uppercase; font-weight: 700; }
+  #backoff { display: none; margin-top: 8px; padding: 5px 8px; border-radius: 6px;
+    background: #14361f; color: #6fe08d; font-size: 11px; letter-spacing: .1em; }
+  #backoff.on { display: block; }
+  #conn { position: fixed; bottom: 14px; left: 14px; font-size: 11px; color: #6b7681; }
+  #conn .dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+    background: #b4472e; margin-right: 6px; vertical-align: middle; }
+  #conn .dot.live { background: #47b46a; }
+
+  /* Control dock (pointer events on) */
+  #dock { position: fixed; bottom: 14px; right: 14px; width: 250px; pointer-events: auto; }
+  #dock .ctl { margin: 9px 0; }
+  #dock label { font-size: 11px; color: #aab3bd; display: block; margin-bottom: 4px; }
+  #dock input[type=range] { width: 100%; accent-color: #b4472e; }
+  #dock .modebar { display: flex; gap: 6px; margin-bottom: 6px; }
+  #dock button { flex: 1; background: #171c22; color: #cdd3da; border: 1px solid #2a313a;
+    border-radius: 7px; padding: 7px 6px; font: inherit; font-size: 11px; cursor: pointer; }
+  #dock button.active { background: #b4472e; border-color: #b4472e; color: #fff; }
+  #dock input[type=text] { width: 100%; background: #10141a; color: #cdd3da;
+    border: 1px solid #2a313a; border-radius: 6px; padding: 6px; font: inherit; font-size: 11px; }
+
+  /* Start overlay */
+  #start { position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; background: radial-gradient(circle at 50% 40%, #14181e, #000);
+    z-index: 20; text-align: center; padding: 24px; }
+  #start h1 { font-size: 30px; letter-spacing: .12em; margin: 0 0 6px; color: #e6ebf0; }
+  #start p { max-width: 460px; color: #8b95a0; font-size: 13px; line-height: 1.7; }
+  #start .go { margin-top: 22px; pointer-events: auto; background: #b4472e; color: #fff;
+    border: 0; border-radius: 10px; padding: 14px 40px; font: inherit; font-size: 15px;
+    letter-spacing: .12em; cursor: pointer; text-transform: uppercase; }
+  #start .keys { margin-top: 18px; font-size: 11px; color: #5f6a75; letter-spacing: .05em; }
+  #vignette { position: fixed; inset: 0; pointer-events: none;
+    box-shadow: inset 0 0 170px 10px rgba(0,0,0,.72); }
+</style>
+</head>
+<body>
+  <div id="stage"><canvas id="view"></canvas></div>
+  <div id="vignette"></div>
+
+  <div id="hud">
+    <div id="affect" class="panel">
+      <h2>Affect · your brain</h2>
+      <div class="meter" data-k="fear"><label><span>Fear</span><span class="v">0</span></label><div class="bar"><div class="fill"></div></div></div>
+      <div class="meter" data-k="stress"><label><span>Stress</span><span class="v">0</span></label><div class="bar"><div class="fill"></div></div></div>
+      <div class="meter" data-k="arousal"><label><span>Arousal</span><span class="v">0</span></label><div class="bar"><div class="fill"></div></div></div>
+      <div class="meter" data-k="engagement"><label><span>Engagement</span><span class="v">0</span></label><div class="bar"><div class="fill"></div></div></div>
+      <div class="meter" data-k="relaxation"><label><span>Relaxation</span><span class="v">0</span></label><div class="bar"><div class="fill"></div></div></div>
+    </div>
+
+    <div id="status" class="panel">
+      <h2>Director</h2>
+      <div id="mood">unease</div>
+      <div class="row"><span>Intensity</span><b id="s-int">0.00</b></div>
+      <div class="row"><span>Heartbeat</span><b id="s-bpm">60</b></div>
+      <div class="row"><span>Stalker</span><b id="s-chr">—</b></div>
+      <div id="backoff">⛨ SAFETY BACK-OFF</div>
+    </div>
+
+    <div id="dock" class="panel">
+      <div class="modebar">
+        <button id="m-local" class="active">Local sim</button>
+        <button id="m-live">Live engine</button>
+      </div>
+      <div class="ctl" id="urlbox" style="display:none">
+        <label>Engine URL</label>
+        <input id="engineUrl" type="text" value="http://localhost:8000" />
+      </div>
+      <div class="ctl">
+        <label>Fear driver — <span id="drv">auto</span></label>
+        <input id="fear" type="range" min="0" max="100" value="20" />
+      </div>
+      <div class="ctl">
+        <label><input type="checkbox" id="auto" checked style="accent-color:#b4472e"> Auto-escalate (breathe &amp; scare)</label>
+      </div>
+    </div>
+  </div>
+
+  <div id="conn"><span class="dot"></span><span id="conn-t">local simulation</span></div>
+
+  <div id="start">
+    <h1>EEG&nbsp;HORROR&nbsp;ENGINE</h1>
+    <p>An adaptive horror experience that reshapes itself around your fear.
+       This is the new browser renderer — it replaces the DirectX build and runs
+       anywhere, no install. It plays standalone with a built-in EEG simulator,
+       or connects to the live engine for real brain input.</p>
+    <button class="go" id="go">Enter</button>
+    <div class="keys">WASD / arrows — move&nbsp;&nbsp;·&nbsp;&nbsp;mouse or ◀ ▶ — look&nbsp;&nbsp;·&nbsp;&nbsp;Esc — release cursor</div>
+  </div>
+
+  <script src="js/game.js"></script>
+</body>
+</html>

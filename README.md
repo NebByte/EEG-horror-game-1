@@ -13,6 +13,17 @@ modulates those assets at runtime from the measured affect. Everything is
 exposed over an **HTTP + WebSocket API** so any game client (Unity, Unreal, web)
 can drive it.
 
+The game itself ships as a **browser/WebGL client** (`web/`) — a first-person
+raycasting horror renderer written in pure HTML5 canvas + WebAudio, **no engine,
+no build, no plugins**. It runs on Windows, macOS and Linux by opening one file,
+and reshapes the corridor, fog, lighting, heartbeat and the stalker in real time
+from the director's directives.
+
+> **Why not DirectX?** The old plan was a native DirectX 12 runtime. It was
+> Windows-only, needed a heavy C++/CMake/vcpkg toolchain, and never built
+> cleanly. It's been **replaced by the browser client** above — same directives,
+> zero install, runs everywhere.
+
 > **Status: prototype.** It runs end-to-end today with a built-in EEG simulator
 > and an offline mock asset provider — **no hardware and no cloud credentials
 > required**. See [`ROADMAP.md`](./ROADMAP.md) for the path to production.
@@ -55,14 +66,32 @@ Full design in [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 ```bash
 pip install -r requirements-dev.txt
 
-# 1) See the whole loop escalate + hit the safety rail, no server needed:
+# Play it — starts the engine and opens the WebGL horror game in your browser:
+python run.py          # Windows / macOS / Linux
+#   ./run.sh           # macOS / Linux
+#   run.bat            # Windows (double-click)
+```
+
+Then move with **WASD / arrows**, look with the **mouse**, and drag the **fear
+slider** (or tick *Auto-escalate*) to watch the world turn from *unease* to
+*panic*. Switch the dock to **Live engine** to drive it from real streamed EEG.
+
+Prefer the pieces on their own:
+
+```bash
+# 1) See the whole loop escalate in your terminal, no server needed:
 python scripts/demo_loop.py
 
-# 2) Run the API:
+# 2) Run the API + game server:
 uvicorn engine.main:app --reload
-#   -> open http://localhost:8000/docs
+#   -> game:  http://localhost:8000/
+#   -> docs:  http://localhost:8000/docs
 
-# 3) Run tests:
+# 3) Stream (simulated) live EEG into a running engine:
+python run_eeg.py                 # offline simulator
+python run_eeg.py neurosky COM7   # a real NeuroSky headset
+
+# 4) Run tests:
 pytest -q
 ```
 
@@ -131,15 +160,19 @@ Cloud Shell (keyless ADC).
 
 ```
 engine/
-  main.py            FastAPI app
+  main.py            FastAPI app (also serves the web game at /)
   config.py          env-driven settings
   schemas.py         shared pydantic contracts
   api/               HTTP + WS routers (health, sessions, eeg)
-  eeg/               band powers, affect model, simulator
-  generative/        provider interface, mock, vertex, pipeline
+  eeg/               band powers, affect model, simulator, sources, gateway
+  generative/        provider interface, mock, pipeline
   experience/        orchestrator (director) + session store
+web/                 browser/WebGL game client (replaces the DirectX runtime)
+  index.html         HUD + controls
+  js/game.js         raycasting renderer, affect sim, engine client, audio
 scripts/demo_loop.py end-to-end offline demo
-tests/               affect, pipeline, and API tests
+run.py / run.sh      one-command launchers (start engine + open the game)
+tests/               affect, orchestrator, and API tests
 ```
 
 ---

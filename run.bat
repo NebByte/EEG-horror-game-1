@@ -1,4 +1,4 @@
 @echo off
-rem One-click launcher — starts the engine, runs the game, cleans up.
-rem Optional: pass the MindLink COM port, e.g.  run.bat 5   (default 7)
+rem One-click launcher (Windows) — starts the engine and opens the WebGL game.
+rem The browser client replaces the old DirectX runtime; nothing to compile.
 powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0run.ps1" %*

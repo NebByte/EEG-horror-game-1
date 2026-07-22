@@ -79,8 +79,30 @@ ElevenLabs for audio tomorrow). The rest of the engine depends only on the ABC.
 ### `engine/api/` — the surface
 FastAPI. `sessions.py` covers lifecycle + (background) generation; `eeg.py`
 covers the REST batch endpoint and the WebSocket live loop; `health.py` for
-readiness. `main.py` wires routers under `API_PREFIX` (default `/v1`) and opens
-CORS for local game clients.
+readiness. `main.py` wires routers under `API_PREFIX` (default `/v1`), opens
+CORS for local game clients, and mounts the `web/` client at `/`.
+
+### `web/` — the game client (replaces the DirectX runtime)
+A first-person **raycasting** renderer in pure HTML5 canvas + WebAudio — no
+game engine, no libraries, no build step, no DirectX. `index.html` is the HUD
+and controls; `js/game.js` is the renderer + audio + two input modes:
+
+- **Local sim** — a compact JS mirror of the Python affect + director so the
+  game plays standalone (open the file, no server, no headset).
+- **Live engine** — creates a session, streams synthetic `EEGChunk`s to the
+  WebSocket `/stream`, and renders the `Directive`s the engine returns.
+
+The renderer maps a `Directive` straight onto what you see and hear: `mood`
+tints the walls, `intensity` drives fog/darkness and the stalker's aggression,
+`heartbeat_bpm` sets the WebAudio pulse, `flicker` darkens the lights, and
+`safety_backoff` forces the calm `relief` palette.
+
+**Why a browser client?** The original plan was a native **DirectX 12** runtime
+(`runtime/`, C++/CMake/vcpkg). It was Windows-only, heavy to build, and never
+ran. Because the engine already exposes everything over HTTP + WebSocket, the
+client is just a consumer of `Directive`s — so a zero-install web renderer gives
+the same experience on every platform. Unity/Unreal remain drop-in alternatives
+against the identical API.
 
 ## Data flow (live loop)
 
