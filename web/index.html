@@ -38,6 +38,23 @@
     background: #b4472e; margin-right: 6px; vertical-align: middle; }
   #conn .dot.live { background: #47b46a; }
 
+  /* Architect panel (the script / beats / learning) */
+  #architect { top: 258px; left: 14px; width: 232px; }
+  #architect .beatline { display: flex; justify-content: space-between; font-size: 11px;
+    color: #aab3bd; margin-bottom: 6px; }
+  #architect .beatline b { color: #e6ebf0; }
+  #architect .track { height: 5px; background: #1a1f26; border-radius: 3px; overflow: hidden; margin-bottom: 8px; }
+  #architect .track .p { height: 100%; width: 0%; background: #7a5cd0; transition: width .3s linear; }
+  #architect .els { font-size: 10.5px; line-height: 1.5; color: #9aa6b1; max-height: 66px; overflow: hidden; }
+  #architect .els .tag { display: inline-block; background: #171c22; border: 1px solid #2a313a;
+    border-radius: 5px; padding: 1px 6px; margin: 2px 3px 0 0; color: #c7cfd8; }
+  #architect .rat { font-size: 10px; color: #6b7681; margin-top: 8px; font-style: italic; line-height: 1.45; }
+  #learning { margin-top: 9px; padding-top: 8px; border-top: 1px solid #22282f;
+    font-size: 10.5px; color: #8b95a0; }
+  #learning b { color: #b39ce8; }
+  #learning .pulse { color: #6fe08d; opacity: 0; transition: opacity .2s; }
+  #learning .pulse.on { opacity: 1; }
+
   /* Control dock (pointer events on) */
   #dock { position: fixed; bottom: 14px; right: 14px; width: 250px; pointer-events: auto; }
   #dock .ctl { margin: 9px 0; }
@@ -83,8 +100,21 @@
       <div id="mood">unease</div>
       <div class="row"><span>Intensity</span><b id="s-int">0.00</b></div>
       <div class="row"><span>Heartbeat</span><b id="s-bpm">60</b></div>
+      <div class="row"><span>Space</span><b id="s-space">—</b></div>
       <div class="row"><span>Stalker</span><b id="s-chr">—</b></div>
       <div id="backoff">⛨ SAFETY BACK-OFF</div>
+    </div>
+
+    <div id="architect" class="panel">
+      <h2>Architect · the script</h2>
+      <div class="beatline"><span>Beat <b id="a-beat">–</b> / <span id="a-beats">–</span></span><span id="a-mood">–</span></div>
+      <div class="track"><div class="p" id="a-prog"></div></div>
+      <div class="els" id="a-els"><span class="tag">standalone sim</span></div>
+      <div class="rat" id="a-rat"></div>
+      <div id="learning">Learning you: <b id="l-count">0</b> reactions
+        <span class="pulse" id="l-pulse">● learning…</span>
+        <div id="l-top" style="margin-top:4px"></div>
+      </div>
     </div>
 
     <div id="dock" class="panel">

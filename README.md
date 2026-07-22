@@ -13,11 +13,13 @@ modulates those assets at runtime from the measured affect. Everything is
 exposed over an **HTTP + WebSocket API** so any game client (Unity, Unreal, web)
 can drive it.
 
-The game itself ships as a **browser/WebGL client** (`web/`) — a first-person
+The game itself ships as a **browser client** (`web/`) — a first-person
 raycasting horror renderer written in pure HTML5 canvas + WebAudio, **no engine,
-no build, no plugins**. It runs on Windows, macOS and Linux by opening one file,
-and reshapes the corridor, fog, lighting, heartbeat and the stalker in real time
-from the director's directives.
+no build, no plugins**. It runs on Windows, macOS and Linux by opening one file.
+It **plays the Architect's Script**: procedurally generated, textured levels
+(built from seeds into RAM, kkrieger-style), distinct stalkers per encounter,
+and it reshapes fog, lighting, heartbeat and the monster in real time from your
+affect — then **posts your reactions back so the model learns you as you play**.
 
 > **Why not DirectX?** The old plan was a native DirectX 12 runtime. It was
 > Windows-only, needed a heavy C++/CMake/vcpkg toolchain, and never built
