@@ -32,6 +32,9 @@ class PlayerModel(BaseModel):
     datapoint_scores: dict[str, float] = Field(default_factory=dict)
     tag_scores: dict[str, float] = Field(default_factory=dict)
     fear_weights: dict[str, float] = Field(default_factory=dict)
+    # Learned "these work together" scores, keyed "a|b" (a<b). Drives which
+    # DataPoints the Architect *enhances* together, and which to breed.
+    pair_scores: dict[str, float] = Field(default_factory=dict)
     reactions_seen: int = 0
     # How many times this player has started/restarted the game. Drives the
     # "scarier and scarier" escalation — each run pushes harder than the last.
@@ -57,6 +60,20 @@ class PlayerModel(BaseModel):
     def fear_weight(self, fear: str) -> float:
         return self.fear_weights.get(fear, PRIOR)
 
+    def learned_enhances(self, dp_id: str, k: int = 2, min_score: float = 0.55) -> list[str]:
+        """The DataPoints this player reacts to *best when paired* with `dp_id`."""
+        partners: list[tuple[str, float]] = []
+        for key, score in self.pair_scores.items():
+            a, b = key.split("|", 1)
+            if score < min_score:
+                continue
+            if a == dp_id:
+                partners.append((b, score))
+            elif b == dp_id:
+                partners.append((a, score))
+        partners.sort(key=lambda kv: kv[1], reverse=True)
+        return [p for p, _ in partners[:k]]
+
     # -- the update rule --------------------------------------------------- #
     def observe(self, datapoint_ids: list[str], reward: float, fears: list[str] | None = None) -> None:
         """`reward` in [0,1] = how well this moment landed (e.g. fear delta)."""
@@ -68,6 +85,13 @@ class PlayerModel(BaseModel):
             for tag in dp.tags if dp else []:
                 p = self.tag_scores.get(tag, PRIOR)
                 self.tag_scores[tag] = p + LEARN_RATE * (reward - p)
+        # Co-occurrence: every unordered pair present this moment learns the reward.
+        uniq = sorted(set(datapoint_ids))
+        for i in range(len(uniq)):
+            for j in range(i + 1, len(uniq)):
+                key = f"{uniq[i]}|{uniq[j]}"
+                p = self.pair_scores.get(key, PRIOR)
+                self.pair_scores[key] = p + LEARN_RATE * (reward - p)
         for fear in fears or []:
             p = self.fear_weights.get(fear, PRIOR)
             self.fear_weights[fear] = p + LEARN_RATE * (reward - p)

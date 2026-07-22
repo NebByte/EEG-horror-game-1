@@ -54,10 +54,14 @@ class MockComposer:
         learned = pm.score_datapoint(dp.id)
         # Escalation biases selection toward the more intense DataPoints over runs.
         dread = escalation * dp.base_intensity
-        return 0.4 * fit + 0.28 * fear_fit + 0.22 * learned + 0.18 * dread
+        # Exploration: give bred/personalized DataPoints a nudge so the player
+        # actually encounters the ones the model made for them.
+        bred = 0.12 if "~" in dp.id else 0.0
+        return 0.38 * fit + 0.26 * fear_fit + 0.22 * learned + 0.16 * dread + bred
 
     def _pick_for_beat(self, mood: Mood, target: float, seed: SeedProfile,
-                       pm: PlayerModel, rng: random.Random, escalation: float) -> list[str]:
+                       pm: PlayerModel, rng: random.Random, escalation: float,
+                       by_cat: dict, by_id: dict) -> list[str]:
         chosen: list[str] = []
         # One space + one lighting always; encounters/audio/events by tension.
         want = {"space": 1, "lighting": 1, "audio": 1 if target < 0.5 else 2,
@@ -67,24 +71,35 @@ class MockComposer:
             k = want.get(cat, 0)
             if k <= 0:
                 continue
-            pool = catalog_by_category(cat)
+            pool = by_cat.get(cat, [])
             ranked = sorted(pool, key=lambda d: self._rank(d, mood, target, seed, pm, escalation)
                             + rng.uniform(0, 0.08), reverse=True)
             chosen.extend(d.id for d in ranked[:k])
-        # Enhance: for each strong pick, pull in a partner DataPoint it amplifies.
+        # Enhance: for each strong pick, pull in a partner it amplifies (learned
+        # co-occurrence has already been merged into `enhances` for this player).
         for dp_id in list(chosen):
-            dp = get_datapoint(dp_id)
+            dp = by_id.get(dp_id)
             if not dp or not dp.enhances:
                 continue
             if pm.score_datapoint(dp_id) >= 0.5:  # only amplify what's working
                 partner = max(dp.enhances, key=lambda p: pm.score_datapoint(p))
-                if partner not in chosen and get_datapoint(partner):
+                if partner not in chosen and partner in by_id:
                     chosen.append(partner)
         return chosen
 
     def compose(self, session_id: str, seed: SeedProfile, pm: PlayerModel,
-                length: int = 8, recent_affect: AffectState | None = None) -> Script:
+                length: int = 8, recent_affect: AffectState | None = None,
+                catalog: list[DataPoint] | None = None) -> Script:
+        from engine.architect.evolution import evolved_catalog
+
         escalation = pm.escalation()
+        # The player's personalized, evolving catalog (base + learned enhances +
+        # bred DataPoints), unless an explicit catalog is supplied.
+        cat_list = catalog if catalog is not None else evolved_catalog(pm)
+        by_id = {d.id: d for d in cat_list}
+        by_cat: dict = {}
+        for d in cat_list:
+            by_cat.setdefault(d.category, []).append(d)
         rng = random.Random(_seed_int(session_id, pm.runs, pm.reactions_seen, seed.theme))
 
         # Build a tension curve of `length` beats sampled across the arc, tilted
@@ -106,23 +121,28 @@ class MockComposer:
         duration = max(18.0, 40.0 - escalation * 14.0)
 
         beats: list[Beat] = []
+        used: set[str] = set()
         for i, (mood, target) in enumerate(curve):
-            dp_ids = self._pick_for_beat(mood, target, seed, pm, rng, escalation)
-            names = [get_datapoint(d).name for d in dp_ids if get_datapoint(d)]
+            dp_ids = self._pick_for_beat(mood, target, seed, pm, rng, escalation, by_cat, by_id)
+            used.update(dp_ids)
+            names = [by_id[d].name for d in dp_ids if d in by_id]
             beats.append(Beat(index=i, mood=mood, target_tension=round(target, 3),
                               duration_s=round(duration, 1), datapoint_ids=dp_ids,
                               note=" · ".join(names)))
 
         top = sorted(pm.datapoint_scores.items(), key=lambda kv: kv[1], reverse=True)[:3]
+        n_bred = sum(1 for d in cat_list if "~" in d.id)
         rationale = (
             f"Run {pm.runs} · escalation {escalation:.2f}. Composed {length} beats for "
             f"'{seed.theme}', conditioned on {pm.reactions_seen} past reactions"
+            + (f", {n_bred} bred DataPoints" if n_bred else "")
             + (f"; leaning into {', '.join(k for k, _ in top)}." if top else " (no history yet)."))
 
         return Script(session_id=session_id, player_id=pm.player_id, seed=seed,
                       version=pm.reactions_seen + 1, composer=self.name,
                       run=pm.runs, escalation=round(escalation, 3),
                       beats=beats, tension_curve=[round(t, 3) for _, t in curve],
+                      datapoints={d: by_id[d].model_dump() for d in used if d in by_id},
                       rationale=rationale)
 
 
@@ -150,17 +170,22 @@ class AnthropicComposer(MockComposer):
 
         self._client = anthropic.Anthropic(api_key=key)
 
-    def _catalog_digest(self) -> str:
+    def _catalog_digest(self, cat_list) -> str:
         return "\n".join(
             f"- {d.id} ({d.category}, intensity {d.base_intensity:.2f}) "
             f"fears={list(d.fear_affinity)} enhances={d.enhances}"
-            for d in CATALOG
+            for d in cat_list
         )
 
     def compose(self, session_id: str, seed: SeedProfile, pm: PlayerModel,
-                length: int = 8, recent_affect: AffectState | None = None) -> Script:
+                length: int = 8, recent_affect: AffectState | None = None,
+                catalog: list[DataPoint] | None = None) -> Script:
         import json
 
+        from engine.architect.evolution import evolved_catalog
+
+        cat_list = catalog if catalog is not None else evolved_catalog(pm)
+        by_id = {d.id: d for d in cat_list}
         top = sorted(pm.datapoint_scores.items(), key=lambda kv: kv[1], reverse=True)[:6]
         prompt = (
             "You are the Architect of a personalized EEG-driven horror game. Author a "
@@ -171,7 +196,7 @@ class AnthropicComposer(MockComposer):
             f"Intensity preference: {seed.intensity_preference}\n"
             f"Reactions observed: {pm.reactions_seen}\n"
             f"Top learned scores: {top}\n\n"
-            f"DataPoint catalog:\n{self._catalog_digest()}\n\n"
+            f"DataPoint catalog:\n{self._catalog_digest(cat_list)}\n\n"
             'Return ONLY minified JSON: {"beats":[{"index":0,"mood":"unease|dread|panic|relief",'
             '"target_tension":0.0-1.0,"datapoint_ids":["..."],"note":"..."}],"rationale":"..."}'
         )
@@ -187,20 +212,22 @@ class AnthropicComposer(MockComposer):
             beats = [
                 Beat(index=b.get("index", i), mood=b["mood"],
                      target_tension=float(b["target_tension"]),
-                     datapoint_ids=[d for d in b.get("datapoint_ids", []) if get_datapoint(d)],
+                     datapoint_ids=[d for d in b.get("datapoint_ids", []) if d in by_id],
                      note=b.get("note", ""))
                 for i, b in enumerate(data["beats"])
             ]
             if not beats:
                 raise ValueError("empty script")
+            used = {d for b in beats for d in b.datapoint_ids}
             return Script(session_id=session_id, player_id=pm.player_id, seed=seed,
                           version=pm.reactions_seen + 1, composer=self.name,
                           run=pm.runs, escalation=round(pm.escalation(), 3), beats=beats,
                           tension_curve=[b.target_tension for b in beats],
+                          datapoints={d: by_id[d].model_dump() for d in used if d in by_id},
                           rationale=data.get("rationale", ""))
         except Exception as exc:  # noqa: BLE001 — always ship a playable script
             log.warning("Anthropic composer failed (%s); using mock composer.", exc)
-            script = super().compose(session_id, seed, pm, length, recent_affect)
+            script = super().compose(session_id, seed, pm, length, recent_affect, cat_list)
             script.composer = "mock(fallback)"
             return script
 

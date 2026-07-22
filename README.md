@@ -74,7 +74,14 @@ something. See it learn:
 
 ```bash
 python scripts/demo_architect.py      # compose -> react -> re-author, offline
+python scripts/demo_evolution.py      # the model breeds new DataPoints for you
 ```
+
+Beyond scoring, the learning layer (`engine/architect/evolution.py`) **breeds**:
+it links the DataPoints you react to best *together* (enhance), reuses your top
+scarers (copy), and **mutates/crosses them into brand-new personalized
+DataPoints** (e.g. a `crawler × render` hybrid) that join your catalog and feed
+the next script — so the game literally invents new horrors tuned to you.
 
 ```
 POST /v1/sessions/{id}/script       compose the personalized game

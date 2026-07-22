@@ -95,7 +95,9 @@ Deeper, smarter real-time adaptation.
 
 - 🟢 **D1** Tension curve + mood selection + safety back-off (prototype)
 - ⬜ **D2** Richer director policy (pacing beats, jump-scare cooldowns, habituation modelling)
-- ⬜ **D3** Per-player fear model: learn what *this* player reacts to, weight assets accordingly
+- 🟢 **D3** Per-player fear model: learns what *this* player reacts to (DataPoint
+  / tag / fear / co-occurrence scores) and **breeds new personalized DataPoints**
+  (mutation + crossover) from the top performers (`engine/architect/evolution.py`)
 - ⬜ **D4** Difficulty/comfort modes (intensity caps, opt-out categories)
 - ⬜ **D5** Deterministic replay of a session from recorded affect (for tuning/QA)
 - ⬜ **D6** A/B experiment hooks for director policies

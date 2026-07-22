@@ -7,7 +7,7 @@ from `(run_seed, datapoint_id, kind)` so a given run is internally consistent bu
 """
 from __future__ import annotations
 
-from engine.architect.datapoints import get_datapoint
+from engine.architect.datapoints import DataPoint, get_datapoint
 from engine.assets.models import AssetKind, MediaAsset
 from engine.assets.sources import AssetSource, get_asset_source
 
@@ -30,9 +30,9 @@ class AssetResolver:
     def __init__(self, source: AssetSource | None = None) -> None:
         self.source = source or get_asset_source()
 
-    def resolve_datapoint(self, dp_id: str, run_seed: int, mood: str,
-                          fears: list[str], escalation: float) -> list[MediaAsset]:
-        dp = get_datapoint(dp_id)
+    def resolve_datapoint(self, dp_id: str, run_seed: int, mood: str, fears: list[str],
+                          escalation: float, lookup: dict[str, DataPoint] | None = None) -> list[MediaAsset]:
+        dp = (lookup or {}).get(dp_id) or get_datapoint(dp_id)
         if dp is None:
             return []
         assets: list[MediaAsset] = []
@@ -41,18 +41,28 @@ class AssetResolver:
             assets.append(self.source.fetch(kind, s, mood, dp.tags, fears, escalation))
         return assets
 
-    def resolve_script(self, script, run_seed: int, escalation: float) -> dict[str, list[MediaAsset]]:
+    def resolve_script(self, script, run_seed: int, escalation: float,
+                       catalog: list[DataPoint] | None = None) -> dict[str, list[MediaAsset]]:
         """Return {datapoint_id -> [MediaAsset,...]} for every DataPoint in the
-        script, resolved fresh for this run."""
+        script, resolved fresh for this run. Bred/synthesized DataPoints are
+        resolved from the script's own `datapoints` (or an explicit catalog)."""
+        lookup: dict[str, DataPoint] = {d.id: d for d in (catalog or [])}
+        for dp_id, raw in (getattr(script, "datapoints", None) or {}).items():
+            if dp_id not in lookup:
+                try:
+                    lookup[dp_id] = DataPoint.model_validate(raw)
+                except Exception:
+                    pass
         out: dict[str, list[MediaAsset]] = {}
         for beat in script.beats:
             for dp_id in beat.datapoint_ids:
                 if dp_id in out:
                     continue
-                out[dp_id] = self.resolve_datapoint(dp_id, run_seed, beat.mood, script.seed.fears, escalation)
+                out[dp_id] = self.resolve_datapoint(dp_id, run_seed, beat.mood, script.seed.fears, escalation, lookup)
         return out
 
 
 def resolve_script_assets(script, run_seed: int, escalation: float,
-                          source: AssetSource | None = None) -> dict[str, list[MediaAsset]]:
-    return AssetResolver(source).resolve_script(script, run_seed, escalation)
+                          source: AssetSource | None = None,
+                          catalog: list[DataPoint] | None = None) -> dict[str, list[MediaAsset]]:
+    return AssetResolver(source).resolve_script(script, run_seed, escalation, catalog)

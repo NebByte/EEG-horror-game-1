@@ -36,6 +36,9 @@ class Script(BaseModel):
     tension_curve: list[float] = Field(default_factory=list)
     # Per-run resolved media, keyed by DataPoint id: {dp_id -> [MediaAsset,...]}.
     assets: dict[str, list] = Field(default_factory=dict)
+    # The DataPoint definitions referenced by this script (incl. any bred/
+    # synthesized ones not in the global catalog), keyed by id.
+    datapoints: dict[str, dict] = Field(default_factory=dict)
     # Why the Architect made these choices (conditioning summary / Claude rationale).
     rationale: str = ""
 

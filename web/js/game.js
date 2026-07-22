@@ -348,7 +348,11 @@
   }
   function setEncounter(dpId) {
     if (!dpId) { scene.encounter = null; return; }
-    const e = ENCOUNTERS[dpId]; if (e) scene.encounter = { type: dpId, ...e };
+    // Bred/synthesized ids (e.g. "encounter.crawler~m3", "encounter.a+b~x")
+    // fall back to their parent template; the resolved character asset then
+    // overrides silhouette/speed, so personalized encounters still render.
+    let e = ENCOUNTERS[dpId] || ENCOUNTERS[dpId.split("~")[0].split("+")[0]] || { name: "Presence", sil: "tall", speed: 0.8, aggr: 0.5 };
+    scene.encounter = { type: dpId, ...e };
   }
 
   // ----------------------------------------------------------- LIVE engine ---

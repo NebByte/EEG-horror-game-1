@@ -80,10 +80,20 @@ The Architect authors a personalized **Script** and learns the player over time.
   lets **Claude** author the Script from the catalog + player model, degrading to
   the mock on any error. `get_composer()` chooses from config.
 - `learning.py` — the **PlayerModel**: per-DataPoint / per-tag / per-fear scores
-  updated from reactions (EEG affect deltas now; computer-vision affect later),
+  *and* per-pair co-occurrence scores, updated from reactions (EEG + CV affect),
   persisted as JSON so it improves across restarts. This is the "re-author a
   fresh combination that has learned you" loop: compose reads the model, play
   posts reactions, the model updates for next time.
+- `evolution.py` — the model doesn't just *score* DataPoints, it **breeds** them.
+  From the learned scores it decides, each run: **enhance** (link DataPoints the
+  player reacts to best *together*, from learned co-occurrence), **copy/reuse**
+  (high scorers rank up), and **breed similar** — *mutate* a top DataPoint into a
+  near-variant and *cross* two into a hybrid, producing brand-new personalized
+  DataPoints that join the player's `evolved_catalog` and feed the next script.
+  Deterministic per player, growing as reactions accumulate. This is an online-
+  learning + evolutionary approach (explainable, right-sized for tiny per-player
+  data) — the same `EEGChunk → reaction → model` interface a trained net can
+  later slot behind.
 
 **Why not just generate everything?** Generation is slow, costly, and
 non-deterministic. Composing from a curated procedural catalog is fast, cheap,
