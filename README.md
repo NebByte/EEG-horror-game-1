@@ -113,13 +113,38 @@ uvicorn engine.main:app --reload
 #   -> game:  http://localhost:8000/
 #   -> docs:  http://localhost:8000/docs
 
-# 3) Stream (simulated) live EEG into a running engine:
-python run_eeg.py                 # offline simulator
-python run_eeg.py neurosky COM7   # a real NeuroSky headset
+# 3) Watch it get scarier and scarier, with fresh assets each run:
+python scripts/demo_escalation.py
 
-# 4) Run tests:
+# 4) Stream (simulated) live EEG into a running engine:
+python run_eeg.py                 # offline simulator
+python run_eeg.py mindlink COM7   # a real NeuroSky MindLink headset
+
+# 5) Run tests:
 pytest -q
 ```
+
+### Hardware: the NeuroSky MindLink
+
+The target headset is the **NeuroSky MindLink** — a single-channel (FP1) dry
+electrode sampling raw EEG at 512 Hz over the ThinkGear serial protocol, also
+reporting eSense Attention/Meditation and a signal-quality value. The
+`mindlink` source (`engine/eeg/sources.py`) parses that stream; because it's a
+*single* channel it can't measure frontal alpha asymmetry, so valence falls back
+to neutral and fear is driven by arousal + stress + band powers. Install the
+serial deps with `pip install -r requirements-eeg.txt`, then:
+
+```bash
+python run_eeg.py mindlink COM7   # COM port the headset pairs on (57600 baud)
+```
+
+### Every run is different, and scarier
+
+Each time you compose a Script it's a new **run**: the Architect's **escalation**
+rises (higher tension ceiling, faster beats, more intense elements), and every
+DataPoint resolves to **fresh media** (a different map layout, stalker, palette,
+sound, animation) seeded per run. Nothing heavy ships — variants are procedural
+by default (`engine/assets/`), with hooks for open-asset libraries.
 
 ### Drive the API by hand
 

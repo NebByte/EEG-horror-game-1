@@ -35,9 +35,13 @@ Check items off as you go.
 ## Workstream A — EEG hardware & ingestion
 Turn real headset data into clean `EEGChunk`s.
 
-- ⬜ **A1** Integrate a real headset SDK (LSL / Muse / OpenBCI / Emotiv) → adapter that emits `EEGChunk`
-- ⬜ **A2** Build a device gateway (client-side) that streams to the WS `/stream` endpoint
-- ⬜ **A3** Signal quality: contact/impedance check, dropout detection, per-channel gating
+- 🟡 **A1** Real headset adapter — **NeuroSky MindLink** (ThinkGear) implemented:
+  single-channel FP1 @ 512 Hz, pure unit-tested packet parser, eSense +
+  poor-signal surfaced (`engine/eeg/sources.py`). Verify against real hardware;
+  add LSL / Muse / OpenBCI / Emotiv adapters behind the same interface
+- 🟢 **A2** Client-side device gateway streams to the WS `/stream` (`engine/eeg/gateway.py`)
+- 🟡 **A3** Signal quality: MindLink poor-signal gating in place; add impedance
+  check, dropout detection, and per-window rejection
 - ⬜ **A4** Artifact rejection (eye blinks / EMG / motion) before band-power extraction
 - ⬜ **A5** Replace FFT periodogram with Welch + proper windowing/overlap
 - ⬜ **A6** Timestamp sync & jitter handling across channels
@@ -72,6 +76,11 @@ Make the asset bank real, richer, and cheaper.
 - ⬜ **C5** Asset caching & dedup keyed on seed (don't regenerate identical banks)
 - ⬜ **C6** Streaming / just-in-time generation for long sessions (beyond the 4-mood bank)
 - ⬜ **C7** Cost controls: budgets, model tiering, batch generation
+- 🟢 **C8** **Per-run asset resolution** (`engine/assets/`): every DataPoint
+  resolves to fresh, procedurally-varied media (map/model/character/image/sound/
+  animation) seeded per run — different every playthrough, offline, no bloat
+- ⬜ **C9** Wire `RemoteAssetSource` to real open libraries (Poly Haven, Freesound,
+  Mixamo-style rigs) with a license/attribution manifest; cache to a local pack
 
 ## Workstream D — Experience / director
 Deeper, smarter real-time adaptation.
@@ -82,6 +91,9 @@ Deeper, smarter real-time adaptation.
 - ⬜ **D4** Difficulty/comfort modes (intensity caps, opt-out categories)
 - ⬜ **D5** Deterministic replay of a session from recorded affect (for tuning/QA)
 - ⬜ **D6** A/B experiment hooks for director policies
+- 🟢 **D7** **Escalation across runs** ("scarier and scarier"): a persisted per-
+  player run counter raises the tension ceiling, shortens beats, and biases
+  toward more intense DataPoints each restart (`PlayerModel.escalation()`)
 
 ## Workstream E — Platform, API & scale
 Production-grade service.

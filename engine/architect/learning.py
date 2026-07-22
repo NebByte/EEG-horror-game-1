@@ -33,6 +33,14 @@ class PlayerModel(BaseModel):
     tag_scores: dict[str, float] = Field(default_factory=dict)
     fear_weights: dict[str, float] = Field(default_factory=dict)
     reactions_seen: int = 0
+    # How many times this player has started/restarted the game. Drives the
+    # "scarier and scarier" escalation — each run pushes harder than the last.
+    runs: int = 0
+
+    def escalation(self) -> float:
+        """A rising dread factor (can exceed 1.0 to push tension ceilings). Grows
+        with each run and, more slowly, with how much we've learned about them."""
+        return min(1.6, 0.25 + 0.12 * self.runs + 0.008 * self.reactions_seen)
 
     # -- reads used by the composer ---------------------------------------- #
     def score_datapoint(self, dp_id: str) -> float:

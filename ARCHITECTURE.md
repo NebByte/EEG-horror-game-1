@@ -90,6 +90,34 @@ non-deterministic. Composing from a curated procedural catalog is fast, cheap,
 explainable, and personalizable — so generation is reserved for the rare case
 the catalog genuinely can't express what the Architect wants.
 
+### `engine/assets/` — fresh assets every run + escalation
+Turns the Architect's abstract DataPoints into concrete media (maps, models,
+characters, pictures, sounds, animations), resolved **fresh for every run**.
+
+- `models.py` — the `MediaAsset` contract (kind, source, uri/params, license, seed).
+- `sources.py` — `ProceduralAssetSource` synthesises an infinite space of asset
+  variants from a seed (palettes, geometry/texture seeds, synth params, animation
+  clips) — offline, kkrieger-style, nothing heavy on disk. `RemoteAssetSource` is
+  the seam for open-asset libraries (Poly Haven, Freesound, Mixamo-style rigs)
+  and degrades to procedural until wired.
+- `resolver.py` — seeds each asset from `(run_seed, datapoint_id, kind)`, so a run
+  is internally consistent but different from every other run.
+
+**Escalation ("scarier and scarier").** The `PlayerModel` counts `runs`; each
+compose bumps it and raises `escalation`, which the composer uses to lift the
+tension ceiling, shorten beats (faster pacing), and bias selection toward more
+intense DataPoints. The per-run asset seed changes with it, so every restart is a
+hotter, different game.
+
+### `engine/eeg/` — hardware: the NeuroSky MindLink
+`sources.py` includes a `MindLinkSource` (alias `NeuroSkySource`) that speaks the
+ThinkGear serial protocol: a single-channel (FP1) dry-electrode headset sampling
+raw EEG at 512 Hz, plus the eSense Attention/Meditation meters and a Poor-Signal
+quality value used for contact gating. `parse_thinkgear_payload()` is a pure,
+unit-tested parser (raw wave, poor-signal, attention/meditation, ASIC band
+powers). Being single-channel, it can't compute frontal alpha asymmetry, so
+valence falls back to neutral and fear is driven by arousal + stress + bands.
+
 ### `engine/experience/` — the director
 - `orchestrator.py` — the core creative logic. Given `AffectState` + the
   `AssetBank`, it:

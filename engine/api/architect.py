@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from engine.architect.composer import get_composer
 from engine.architect.learning import PlayerModel, player_store
 from engine.architect.script import Script
+from engine.assets.resolver import resolve_script_assets
 from engine.experience.state import store
 from engine.schemas import AffectState
 
@@ -26,6 +27,8 @@ router = APIRouter(tags=["architect"])
 class ComposeRequest(BaseModel):
     length: int = Field(8, ge=1, le=32)
     use_recent_affect: bool = True
+    # Resolve a fresh set of media assets for this run (different every time).
+    fresh_assets: bool = True
 
 
 @router.post("/sessions/{sid}/script", response_model=Script)
@@ -33,8 +36,21 @@ async def compose_script(sid: str, req: ComposeRequest) -> Script:
     sess = store.get(sid)
     if sess is None:
         raise HTTPException(404, "session not found")
+
+    # Each compose is a "run": bump the counter so the game gets scarier and
+    # scarier and the asset seed changes, then persist so it survives restarts.
+    pm = sess.player_model
+    pm.runs += 1
+    player_store.save(pm)
+
     recent = sess.last_affect if req.use_recent_affect else None
-    script = get_composer().compose(sid, sess.seed, sess.player_model, req.length, recent)
+    script = get_composer().compose(sid, sess.seed, pm, req.length, recent)
+
+    if req.fresh_assets:
+        run_seed = abs(hash(f"{sid}:{pm.runs}")) % (2**31)
+        resolved = resolve_script_assets(script, run_seed, script.escalation)
+        script.assets = {k: [a.model_dump() for a in v] for k, v in resolved.items()}
+
     sess.script = script
     sess.beat_index = 0
     return script

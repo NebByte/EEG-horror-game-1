@@ -142,11 +142,12 @@
     "space.flooded_basement": "maze", "space.mirror_room": "room",
   };
 
-  function rebuildLevel(spaceType, seedKey) {
+  function rebuildLevel(spaceType, seedKey, palette) {
     scene.spaceType = spaceType;
     scene.mapSeed = hashStr(spaceType + ":" + seedKey);
     scene.map = genMap(spaceType, scene.mapSeed);
-    scene.texs = makeTextures(scene.palette, scene.mapSeed ^ 0x9e3779b9);
+    // Per-run texture tint: the resolved map asset's palette varies the walls.
+    scene.texs = makeTextures(palette || scene.palette, scene.mapSeed ^ 0x9e3779b9);
     const sp = scene.map.spawn;
     player.x = sp.x; player.y = sp.y; player.a = sp.a;
     monster.x = sp.x + 4; monster.y = sp.y + 4;
@@ -428,23 +429,44 @@
     scene.palette = base.map((c, i) => c + (PANIC_RGB[i] - c) * k);
   }
 
-  // Applying a Beat: choose the space (level built once per space change), the
-  // encounter, lighting, and record which DataPoints are active (for reactions).
-  let currentSpace = null;
+  const hex2rgb = (h) => { const n = parseInt(h.replace("#", ""), 16); return [(n >> 16) & 255, (n >> 8) & 255, n & 255]; };
+  const SIL_MAP = { "tall-thin": "tall", "elongated": "tall", "hunched": "tall", "low-mass": "low", "swarm": "low", "sprinting-mass": "sprint" };
+  const asset = (script, dp, kind) => { const list = (script.assets || {})[dp] || []; return list.find((a) => a.kind === kind) || null; };
+
+  // Applying a Beat: choose the space, the encounter, lighting, and record which
+  // DataPoints are active — now driven by this run's *resolved assets*, so the
+  // level layout, palette and stalker differ every run (fresh assets each time).
+  let currentSpace = null, currentMapSeed = null;
   function applyBeat(beat, script) {
     if (!beat) return;
     scene.mood = beat.mood; scene.palette = MOOD_COLOR[beat.mood] || scene.palette;
     scene.activeDataPoints = beat.datapoint_ids.slice();
-    // space
+
+    // space -> resolved map asset (layout / palette / fog / geometry vary per run)
     const spaceDp = beat.datapoint_ids.find((d) => d.startsWith("space."));
-    const spaceType = SPACE_OF[spaceDp] || currentSpace || "corridor";
-    if (spaceType !== currentSpace) { currentSpace = spaceType; rebuildLevel(spaceType, script.session_id + ":" + beat.index); }
-    // encounter
+    const mapA = spaceDp ? asset(script, spaceDp, "map") : null;
+    let spaceType = (mapA && mapA.params.layout) || SPACE_OF[spaceDp] || currentSpace || "corridor";
+    if (spaceType === "catacomb") spaceType = "maze"; if (spaceType === "ward") spaceType = "room";
+    const mapSeed = mapA ? mapA.params.geometry_seed : (spaceDp || "") + ":" + beat.index;
+    if (spaceType !== currentSpace || mapSeed !== currentMapSeed) {
+      currentSpace = spaceType; currentMapSeed = mapSeed;
+      const pal = mapA && mapA.params.palette ? hex2rgb(mapA.params.palette[1] || mapA.params.palette[0]) : null;
+      rebuildLevel(spaceType, String(mapSeed), pal);
+      if (mapA && mapA.params.fog != null) scene.baseFog = mapA.params.fog;
+    }
+
+    // encounter -> resolved character asset (silhouette / speed vary per run)
     const encDp = beat.datapoint_ids.find((d) => d.startsWith("encounter."));
     setEncounter(encDp || null);
+    if (encDp && scene.encounter) {
+      const chr = asset(script, encDp, "character");
+      if (chr) { scene.encounter.sil = SIL_MAP[chr.params.silhouette] || scene.encounter.sil; scene.encounter.speed = chr.params.speed || scene.encounter.speed; scene.encounter.aggr = chr.params.aggression != null ? chr.params.aggression : scene.encounter.aggr; }
+    }
+
     // lighting tint
     const lightDp = beat.datapoint_ids.find((d) => d.startsWith("lighting."));
     scene.lightColor = lightDp && lightDp.includes("strobe") ? [210, 60, 50] : lightDp && lightDp.includes("backlight") ? [90, 40, 40] : null;
+    updateArchitectHUD();
   }
 
   function advanceScript(dt) {

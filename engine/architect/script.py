@@ -29,8 +29,13 @@ class Script(BaseModel):
     seed: SeedProfile
     version: int = 1
     composer: str = "mock"
+    # Which run this is for the player, and the escalation ("scarier and scarier").
+    run: int = 1
+    escalation: float = 0.25
     beats: list[Beat] = Field(default_factory=list)
     tension_curve: list[float] = Field(default_factory=list)
+    # Per-run resolved media, keyed by DataPoint id: {dp_id -> [MediaAsset,...]}.
+    assets: dict[str, list] = Field(default_factory=dict)
     # Why the Architect made these choices (conditioning summary / Claude rationale).
     rationale: str = ""
 

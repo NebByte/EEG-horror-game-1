@@ -41,6 +41,11 @@ class Settings(BaseSettings):
     # Where per-player learning models are persisted (JSON).
     player_data_dir: str = "data/players"
 
+    # --- Asset resolution (fresh assets every run) ---
+    # "procedural" -> infinite offline variants (default)
+    # "remote"     -> open-asset libraries when configured, else procedural
+    asset_source: str = "procedural"
+
     # --- EEG signal processing ---
     eeg_sample_rate_hz: int = 256
     eeg_window_seconds: float = 2.0
