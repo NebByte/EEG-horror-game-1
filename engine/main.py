@@ -14,7 +14,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from engine.api import eeg, health, sessions
+from engine.api import architect, eeg, health, sessions
 from engine.config import get_settings
 
 logging.basicConfig(level=logging.INFO)
@@ -38,6 +38,7 @@ prefix = settings.api_prefix
 app.include_router(health.router, prefix=prefix)
 app.include_router(sessions.router, prefix=prefix)
 app.include_router(eeg.router, prefix=prefix)
+app.include_router(architect.router, prefix=prefix)
 
 # Serve the browser/WebGL game client (the engine that replaced DirectX).
 # Mounted at root so the client's relative asset paths (js/game.js) resolve.

@@ -9,9 +9,14 @@ from __future__ import annotations
 import uuid
 from collections import deque
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from engine.experience.orchestrator import Orchestrator
 from engine.schemas import AffectState, AssetBank, Directive, SeedProfile
+
+if TYPE_CHECKING:
+    from engine.architect.learning import PlayerModel
+    from engine.architect.script import Script
 
 _HISTORY = 128
 
@@ -21,6 +26,10 @@ class Session:
     id: str
     seed: SeedProfile
     orchestrator: Orchestrator
+    player_id: str = "anon"
+    player_model: "PlayerModel | None" = None
+    script: "Script | None" = None
+    beat_index: int = 0
     bank: AssetBank | None = None
     generating: bool = False
     history: deque = field(default_factory=lambda: deque(maxlen=_HISTORY))
@@ -32,9 +41,13 @@ class SessionStore:
     def __init__(self) -> None:
         self._sessions: dict[str, Session] = {}
 
-    def create(self, seed: SeedProfile) -> Session:
+    def create(self, seed: SeedProfile, player_id: str = "anon") -> Session:
+        # Load the persisted per-player learning model so it improves across runs.
+        from engine.architect.learning import player_store
+
         sid = uuid.uuid4().hex[:12]
-        sess = Session(id=sid, seed=seed, orchestrator=Orchestrator(seed))
+        sess = Session(id=sid, seed=seed, orchestrator=Orchestrator(seed),
+                       player_id=player_id, player_model=player_store.load(player_id))
         self._sessions[sid] = sess
         return sess
 

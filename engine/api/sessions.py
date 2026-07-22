@@ -12,6 +12,8 @@ router = APIRouter(prefix="/sessions", tags=["sessions"])
 
 class CreateSessionRequest(BaseModel):
     seed: SeedProfile = SeedProfile()
+    # Stable id so the learning model follows the same player across sessions.
+    player_id: str = "anon"
 
 
 class SessionSummary(BaseModel):
@@ -25,7 +27,7 @@ class SessionSummary(BaseModel):
 
 @router.post("", response_model=SessionSummary)
 async def create_session(req: CreateSessionRequest) -> SessionSummary:
-    sess = store.create(req.seed)
+    sess = store.create(req.seed, player_id=req.player_id)
     return SessionSummary(id=sess.id, seed=sess.seed, has_bank=False, generating=False)
 
 

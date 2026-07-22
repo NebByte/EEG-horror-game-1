@@ -58,3 +58,30 @@ def test_websocket_stream():
         ws.send_json(_eeg_window(0.8))
         msg = ws.receive_json()
         assert "affect" in msg and "directive" in msg
+
+
+def test_architect_script_and_reaction(tmp_path, monkeypatch):
+    # Isolate the persisted player model to a temp dir.
+    from engine.architect import learning
+
+    monkeypatch.setattr(learning, "player_store", learning.PlayerStore(str(tmp_path)))
+    monkeypatch.setattr("engine.experience.state.player_store", learning.player_store, raising=False)
+
+    sid = client.post("/v1/sessions", json={
+        "seed": {"theme": "asylum", "fears": ["being chased"]}, "player_id": "tester"
+    }).json()["id"]
+
+    script = client.post(f"/v1/sessions/{sid}/script", json={"length": 6}).json()
+    assert len(script["beats"]) == 6
+    beat0 = script["beats"][0]
+
+    r = client.post(f"/v1/sessions/{sid}/reactions", json={
+        "beat_index": 0,
+        "affect_before": {"fear": 0.1}, "affect_peak": {"fear": 0.9, "arousal": 0.8},
+    }).json()
+    assert r["reactions_seen"] == 1
+    assert r["reward"] > 0.6
+    assert set(r["updated_datapoints"]) == set(beat0["datapoint_ids"])
+
+    got = client.get(f"/v1/sessions/{sid}/script").json()
+    assert got["session_id"] == sid

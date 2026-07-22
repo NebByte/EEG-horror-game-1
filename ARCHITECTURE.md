@@ -63,6 +63,33 @@ AffectState`) a model must later satisfy.
 decision that will change (Vertex today, maybe a self-hosted diffusion model or
 ElevenLabs for audio tomorrow). The rest of the engine depends only on the ABC.
 
+### `engine/architect/` — the Architect (the script is the game)
+The Architect authors a personalized **Script** and learns the player over time.
+
+- `datapoints.py` — the **DataPoint** catalog: small, **procedural** ingredients
+  (spaces, encounters, audio, lighting, events, props). Each stores *parameters*
+  (seeds, dims, palettes) not baked media, plus `fear_affinity` (which fears it
+  plays on) and `enhances` (which DataPoints it combines with well). The catalog
+  is tiny on purpose — the value is in *combination*, not asset count.
+- `script.py` — a **Script** is an ordered list of **Beats**; each Beat is a mood
+  + target tension + the DataPoints active during it. The Architect authors the
+  arc; the live EEG director modulates *within* the current beat.
+- `composer.py` — the composer. `MockComposer` selects DataPoints per beat by
+  intensity fit, the player's stated fears, and their learned scores, then
+  *enhances* strong picks by pulling in partner DataPoints. `AnthropicComposer`
+  lets **Claude** author the Script from the catalog + player model, degrading to
+  the mock on any error. `get_composer()` chooses from config.
+- `learning.py` — the **PlayerModel**: per-DataPoint / per-tag / per-fear scores
+  updated from reactions (EEG affect deltas now; computer-vision affect later),
+  persisted as JSON so it improves across restarts. This is the "re-author a
+  fresh combination that has learned you" loop: compose reads the model, play
+  posts reactions, the model updates for next time.
+
+**Why not just generate everything?** Generation is slow, costly, and
+non-deterministic. Composing from a curated procedural catalog is fast, cheap,
+explainable, and personalizable — so generation is reserved for the rare case
+the catalog genuinely can't express what the Architect wants.
+
 ### `engine/experience/` — the director
 - `orchestrator.py` — the core creative logic. Given `AffectState` + the
   `AssetBank`, it:

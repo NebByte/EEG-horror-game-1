@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     google_application_credentials: str = ""
     gcs_bucket: str = ""
 
+    # --- Architect (the "script" composer) ---
+    # "mock"     -> deterministic offline composer weighted by the player model
+    # "anthropic"-> Claude composes the script (needs anthropic SDK + API key)
+    architect_provider: str = "mock"
+    architect_model: str = "claude-opus-4-8"
+    anthropic_api_key: str = ""
+    # Where per-player learning models are persisted (JSON).
+    player_data_dir: str = "data/players"
+
     # --- EEG signal processing ---
     eeg_sample_rate_hz: int = 256
     eeg_window_seconds: float = 2.0

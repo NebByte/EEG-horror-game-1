@@ -55,7 +55,31 @@ from the director's directives.
   (`mock` offline, or `vertex` on Google Cloud) builds an `AssetBank`.
 - **The director** — `engine/experience`: turns live affect into a `Directive`,
   managing a tension curve and a stress **safety back-off**.
+- **The Architect** — `engine/architect`: composes a personalized **Script** (the
+  game) from **DataPoints**, and **learns the player over time** from their
+  reactions. *The script is the game.*
 - **API** — `engine/api`: FastAPI HTTP + WebSocket surface.
+
+### The Architect: the script is the game
+
+The Architect (Claude, or an offline mock) authors a **Script** — an ordered set
+of **Beats** — out of **DataPoints**: small, procedural ingredients (spaces,
+encounters, audio, lighting, events, props) that store *parameters*, not heavy
+media. It selects and *combines* them by the player's fears and a **learned
+model** of what actually scared them before, so every run is a fresh combination
+that adapts to *you*. Generation is only used when the catalog can't express
+something. See it learn:
+
+```bash
+python scripts/demo_architect.py      # compose -> react -> re-author, offline
+```
+
+```
+POST /v1/sessions/{id}/script       compose the personalized game
+GET  /v1/sessions/{id}/script       the current Script
+POST /v1/sessions/{id}/reactions    feed a reaction -> the model learns you
+GET  /v1/players/{player_id}        inspect what it has learned
+```
 
 Full design in [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
@@ -166,6 +190,7 @@ engine/
   api/               HTTP + WS routers (health, sessions, eeg)
   eeg/               band powers, affect model, simulator, sources, gateway
   generative/        provider interface, mock, pipeline
+  architect/         DataPoints + Script composer (Claude/mock) + learning
   experience/        orchestrator (director) + session store
 web/                 browser/WebGL game client (replaces the DirectX runtime)
   index.html         HUD + controls

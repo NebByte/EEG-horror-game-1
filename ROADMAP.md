@@ -106,6 +106,33 @@ Close the loop with an actual game.
 - 🟡 **F4** Latency budget & smoothing (director already smooths intensity;
   client-side interpolation/prediction still to add)
 
+## Workstream I — High-fidelity runtime (WASM + WebGPU) & procedural assets
+Take the browser client from the raycasting prototype to a real 3D horror engine
+that still runs everywhere — and keep the footprint tiny.
+
+> **On "DirectX in the browser":** browsers can't call DirectX directly. The
+> browser's **WebGPU** implementation runs on **Direct3D 12** under the hood on
+> Windows (Metal on macOS, Vulkan on Linux). So a **WASM + WebGPU** game *is*
+> DirectX-backed GPU rendering on Windows while still running cross-platform in
+> the browser — that's how we honour "DirectX" and "runs in the browser" at once.
+> A separate native DirectX desktop build is possible but can't run in a browser.
+
+- ⬜ **I1** WebGPU renderer (WebGL2 fallback) driven by the same `Directive` +
+  `Script`; port the raycaster's role to real 3D corridors/rooms
+- ⬜ **I2** Compile the runtime to **WebAssembly** (Rust `wgpu`, or C++ via
+  Emscripten) for near-native performance in the browser
+- ⬜ **I3** **Procedural asset compiler** (kkrieger-style, the 96 KB demoscene
+  approach): DataPoint `params` (seeds/dims/palettes) → meshes, textures and
+  audio generated **into RAM at load** — tiny on disk, full-fidelity in memory
+- ⬜ **I4** Lossless asset packer: a build script that scans authored/imported
+  assets and packs them 1:1 (dedup + lossless compression), so nothing bloats
+- ⬜ **I5** Open model/animation import (e.g. Mixamo, other openly-licensed
+  sources) with a license/attribution manifest; retarget onto encounter rigs
+- ⬜ **I6** Script-driven runtime: walk the Beats, instantiate each Beat's
+  DataPoints, hand off to the live EEG director for second-to-second modulation
+- ⬜ **I7** Computer-vision affect: fuse webcam facial-affect into the reaction
+  signal alongside EEG (the `cv_affect` field already exists on reactions)
+
 ## Workstream G — Safety, ethics & compliance
 Non-negotiable before real users.
 
