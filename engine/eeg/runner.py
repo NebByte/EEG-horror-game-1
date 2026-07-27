@@ -42,11 +42,27 @@ async def _loop(sid: str, kind: str, port: str, baudrate: int, window: float) ->
     try:
         while store.get(sid) is not None:
             t0 = time.monotonic()
-            chunk = await src.read(window)
+            try:
+                chunk = await src.read(window)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 — a headset disconnect mid-stream
+                if sess.eeg_source == "simulator":
+                    raise  # simulator failing is unexpected; let it bubble
+                log.warning("EEG source read failed (%s); switching to simulator.", exc)
+                try:
+                    await src.close()
+                except Exception:  # noqa: BLE001
+                    pass
+                src = make_source("simulator")
+                sess.eeg_source = "simulator"
+                sess.eeg_source_error = f"hardware read failed: {exc}"
+                continue
             poor = int(getattr(src, "poor_signal", 0) or 0)
             affect = apply_baseline(infer_affect(chunk), sess.baseline)
             quality = assess_quality(chunk, poor)
-            if quality.confidence >= 0.3 or sess.last_directive is None:
+            # Honor the central SignalQuality gating contract (ok = strictly usable).
+            if quality.ok or sess.last_directive is None:
                 directive = sess.orchestrator.step(affect, sess.bank)
             else:
                 directive = sess.last_directive  # too noisy — hold

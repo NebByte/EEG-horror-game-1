@@ -44,8 +44,10 @@ def test_truncated_packets_do_not_crash():
 
 def test_make_source_mindlink_branch_raises_on_bad_port():
     # The mindlink branch must fail cleanly on a bogus/missing port (not hang or
-    # return the simulator); the simulator remains the always-available fallback.
-    with pytest.raises(Exception):
+    # return the simulator). Without pyserial it's a RuntimeError; with pyserial a
+    # bad port is a serial error — both surface as OSError/RuntimeError, never a
+    # silent success. The simulator remains the always-available fallback.
+    with pytest.raises((RuntimeError, OSError)):
         make_source("mindlink", port="__not_a_real_port__")
     assert make_source("simulator") is not None
     assert RAW_TO_UV > 0

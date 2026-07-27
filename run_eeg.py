@@ -36,13 +36,15 @@ async def main() -> None:
     # Choose a source: CLI arg, else simulator. Fall back to sim on hardware error.
     kind = sys.argv[1] if len(sys.argv) > 1 else "simulator"
     port = sys.argv[2] if len(sys.argv) > 2 else "COM7"
+    active_kind = kind
     try:
         src = make_source(kind, port=port, baudrate=57600)
     except Exception as exc:
         print(f"[!] {kind} unavailable ({exc}); using the offline simulator.")
         src = make_source("simulator")
+        active_kind = "simulator"
 
-    print(f"session {sid} — streaming EEG ({kind})...\n")
+    print(f"session {sid} — streaming EEG ({active_kind})...\n")
     n = 0
     try:
         async for frame in run_gateway(src, sid, WS, window_seconds=2.0):

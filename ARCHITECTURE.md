@@ -33,8 +33,9 @@ contracts in one place means the API, EEG, generative, and experience layers all
 speak the same language.
 
 ### `engine/eeg/` — signal → affect
-- `bands.py` — converts an `EEGChunk` into relative band powers via an FFT
-  periodogram, plus `frontal_alpha_asymmetry()` (the approach/withdrawal proxy
+- `bands.py` — converts an `EEGChunk` into relative band powers via a **Welch
+  PSD** (Hann windows + overlap; a plain periodogram is the short-window
+  fallback), plus `frontal_alpha_asymmetry()` (the approach/withdrawal proxy
   used for valence).
 - `affect.py` — maps band powers to an `AffectState` using transparent,
   tunable heuristics (documented inline with their EEG correlates). This is
@@ -215,7 +216,7 @@ game client ◀──affect+directive──┘
 | In-memory session store | Zero infra for the prototype | Single-process only; move to Redis/Firestore for horizontal scale |
 | Provider ABC + mock fallback | Runs with no cloud; swappable backends | Mock isn't representative of real latency/cost |
 | Pre-generate an asset bank | Keeps the live loop model-free & fast | Less "infinite" variety than per-moment generation; add streaming gen later |
-| FFT periodogram (not Welch) | Minimal deps, easy to read | Noisier estimates; add proper windowing + artifact rejection for real signals |
+| Welch PSD (numpy only, no scipy) | Low-variance estimate, minimal deps | Slightly more compute than a single periodogram; add artifact rejection for real signals |
 | Directive = named IDs, not media | Engine stays media-agnostic; client resolves assets | Client must know how to fetch/resolve URIs |
 
 ## Scaling path (summary)

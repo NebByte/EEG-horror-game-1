@@ -900,9 +900,10 @@ let fearLevel = 0;           // 0..100, from the Mind Link (or simulated)
 const MONSTER_NAME = { watcher:'The Watcher', smiler:'The Smiler', crawler:'The Crawler', wanderer:'The Wanderer' };
 
 /* ============================================================
-   MIND LINK  (NeuroSky brainwave sensor → fear biofeedback + live graph)
-   Reads a WebSocket bridge at ws://127.0.0.1:13855 (see mindlink-bridge.js).
-   No device? It runs in SIM mode, deriving "brainwaves" from in-game danger.
+   MIND LINK  (fear biofeedback + live EEG graph)
+   Fed by our engine (EngineBridge → feedEngine) when a real NeuroSky MindLink is
+   read server-side by the engine's serial adapter. No device? It runs in SIM
+   mode, deriving "brainwaves" from in-game danger.
 ============================================================ */
 const MindLink = (() => {
   const N = 170;
@@ -919,103 +920,6 @@ const MindLink = (() => {
     // A real headset is read by our engine (EngineBridge), not this legacy local
     // WebSocket bridge — so we don't open it. SIM until the engine feeds affect.
   }
-  function connect() {                       // optional local bridge (classic-Bluetooth headsets)
-    try {
-      ws = new WebSocket('ws://127.0.0.1:13855');
-      ws.onopen = () => { try { ws.send(JSON.stringify({ enableRawOutput: false, format: 'Json' })); } catch (e) {} };
-      ws.onmessage = ev => {
-        String(ev.data).split(/[\r\n]+/).forEach(line => {
-          if (!line.trim()) return;
-          try {
-            const d = JSON.parse(line);
-            if (d.eSense) {
-              if (typeof d.eSense.attention === 'number') attention = d.eSense.attention;
-              if (typeof d.eSense.meditation === 'number') meditation = d.eSense.meditation;
-            }
-            if (typeof d.poorSignalLevel === 'number') signal = d.poorSignalLevel;
-            live = true; source = 'ws'; lastData = performance.now(); status();
-          } catch (e) {}
-        });
-      };
-      ws.onerror = () => {};
-      ws.onclose = () => { if (source === 'ws') { live = false; status(); } if (tries++ < 3) setTimeout(connect, 5000); };
-    } catch (e) { if (tries++ < 3) setTimeout(connect, 5000); }
-  }
-
-  /* ---- direct in-browser link via Web Bluetooth (BLE headsets) ---- */
-  // Cheap BLE "serial" modules used by these headsets expose one of these services.
-  const BT_SERVICES = [
-    0xfff0, 0xffe0, 0xff10, 0xffb0,
-    '0000fff0-0000-1000-8000-00805f9b34fb',
-    '0000ffe0-0000-1000-8000-00805f9b34fb',
-    '6e400001-b5a3-f393-e0a9-e50e24dcca9e',            // Nordic UART
-  ];
-  async function connectBluetooth() {
-    if (!navigator.bluetooth) {
-      message('Web Bluetooth needs Chrome or Edge (desktop/Android), over https or a local file.', 5);
-      return false;
-    }
-    try {
-      message('Select your Mind Link headset…', 4);
-      const device = await navigator.bluetooth.requestDevice({
-        acceptAllDevices: true, optionalServices: BT_SERVICES,
-      });
-      device.addEventListener('gattserverdisconnected', () => { live = false; source = ''; status(); });
-      const server = await device.gatt.connect();
-      const services = await server.getPrimaryServices();
-      let notifyChar = null;
-      for (const s of services) {
-        for (const c of await s.getCharacteristics()) {
-          console.log('[MindLink] service', s.uuid, 'char', c.uuid, c.properties);
-          if (c.properties.notify || c.properties.indicate) notifyChar = notifyChar || c;
-        }
-      }
-      if (!notifyChar) { message('Connected, but no data channel found. Open the console (F12) and send me the UUIDs.', 6); return false; }
-      await notifyChar.startNotifications();
-      notifyChar.addEventListener('characteristicvaluechanged', e => feedBytes(new Uint8Array(e.target.value.buffer)));
-      source = 'bt'; live = true; lastData = performance.now(); status();
-      message('Mind Link connected — reading your brainwaves.', 4);
-      return true;
-    } catch (e) {
-      message('Mind Link connection cancelled or failed: ' + (e.message || e), 5);
-      return false;
-    }
-  }
-
-  /* ---- ThinkGear binary protocol parser (fed raw bytes from BLE) ---- */
-  let reading = false, plen = 0, payload = [];
-  function feedBytes(bytes) {
-    for (let k = 0; k < bytes.length; k++) parseByte(bytes[k]);
-    live = true; source = source || 'bt'; lastData = performance.now(); status();
-  }
-  let sync = 0;
-  function parseByte(b) {
-    if (!reading) {
-      if (b === 0xAA) { if (++sync >= 2) { reading = 'len'; sync = 0; } }
-      else sync = 0;
-      return;
-    }
-    if (reading === 'len') { if (b > 169) reading = false; else { plen = b; payload = []; reading = 'pl'; } return; }
-    if (reading === 'pl') { payload.push(b); if (payload.length >= plen) reading = 'chk'; return; }
-    if (reading === 'chk') {
-      let sum = 0; for (const p of payload) sum += p;
-      if (((~sum) & 0xFF) === b) parsePayload(payload);
-      reading = false; plen = 0; payload = [];
-    }
-  }
-  function parsePayload(p) {
-    for (let i = 0; i < p.length;) {
-      const code = p[i++];
-      if (code >= 0x80) { const len = p[i++]; i += len; }   // multi-byte (raw wave / power bands) — skip
-      else {
-        const v = p[i++];
-        if (code === 0x02) signal = v;
-        else if (code === 0x04) attention = v;
-        else if (code === 0x05) meditation = v;
-      }
-    }
-  }
-
   function status() {
     const el = document.getElementById('mlStatus');
     if (!el) return;
@@ -1075,7 +979,7 @@ const MindLink = (() => {
     plot(attHist, 'rgba(120,200,255,0.75)');
     plot(fearHist, 'rgba(255,70,70,0.95)');
   }
-  return { init, update, draw, connectBluetooth,
+  return { init, update, draw,
     resetBlame() { for (const k in scaredOf) scaredOf[k] = 0; fear = 0; },
     get fear() { return fear; }, get live() { return live; }, get source() { return source; },
     get attention() { return attention; }, get meditation() { return meditation; },
@@ -1138,10 +1042,13 @@ const EngineBridge = (() => {
     return false;
   }
 
+  let polling = false;
   async function poll() {
-    if (!connected) return;
+    if (!connected || polling) return;   // no overlapping polls
+    polling = true;
     try {
-      const r = await fetch(base + '/v1/sessions/' + sid); if (!r.ok) return;
+      const r = await fetch(base + '/v1/sessions/' + sid, { signal: AbortSignal.timeout(2000) });
+      if (!r.ok) return;
       const s = await r.json();
       // Only drive fear from the engine when an engine source is actually feeding
       // it (a real MindLink). Otherwise the game's own danger-sim runs the fear.
@@ -1149,7 +1056,7 @@ const EngineBridge = (() => {
         const a = s.last_affect;
         MindLink.feedEngine(Math.round((a.arousal || 0) * 100), Math.round((a.relaxation || 0) * 100));
       }
-    } catch (e) {}
+    } catch (e) {} finally { polling = false; }
   }
 
   function tick(dt, ctx) {
@@ -1253,9 +1160,18 @@ function updateObjective() {
 
 // re-randomise the collectibles + exit (maze layout stays fixed across runs)
 function resetObjectives() {
-  pickups.forEach(p => { scene.remove(p.mesh); scene.remove(p.glow); });
+  // Dispose GPU resources — scene.remove() only detaches; buffers/programs would
+  // otherwise leak VRAM on every retry.
+  pickups.forEach(p => {
+    scene.remove(p.mesh); scene.remove(p.glow);
+    p.mesh.geometry.dispose(); p.mesh.material.dispose();
+  });
   pickups.length = 0;
-  if (exitObj.mesh) { scene.remove(exitObj.mesh); scene.remove(exitObj.light); exitObj.mesh = null; }
+  if (exitObj.mesh) {
+    scene.remove(exitObj.mesh); scene.remove(exitObj.light);
+    exitObj.mesh.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+    exitObj.mesh = null;
+  }
   exitObj.active = false;
   placeObjectives();
 }

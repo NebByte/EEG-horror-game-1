@@ -11,5 +11,10 @@ def stable_seed(*parts) -> int:
     per process — so `hash()` would give different seeds after every restart and
     across workers, breaking "reproducible per player/run".
     """
-    digest = hashlib.blake2b("::".join(str(p) for p in parts).encode("utf-8"), digest_size=8).digest()
+    # Length-prefix each part so distinct boundaries never collide, e.g.
+    # ("a::b","c") must differ from ("a","b::c").
+    payload = b"".join(
+        len(b := str(p).encode("utf-8")).to_bytes(8, "big") + b for p in parts
+    )
+    digest = hashlib.blake2b(payload, digest_size=8).digest()
     return int.from_bytes(digest, "big") % (2**31)
