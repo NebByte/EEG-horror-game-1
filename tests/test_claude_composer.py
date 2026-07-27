@@ -25,6 +25,9 @@ class _FakeClient:
         self._text = text
         self.messages = self
 
+    def with_options(self, **kwargs):  # mirrors the real Anthropic client
+        return self
+
     def create(self, **kwargs):
         return _Msg(self._text)
 

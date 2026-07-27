@@ -1,6 +1,8 @@
 """MindLink / ThinkGear packet parsing — verified without hardware."""
 from __future__ import annotations
 
+import pytest
+
 from engine.eeg.sources import RAW_TO_UV, make_source, parse_thinkgear_payload
 
 
@@ -30,9 +32,20 @@ def test_parse_asic_power_bands():
     assert len(out["asic_power"]) == 8
 
 
-def test_make_source_mindlink_falls_back_without_pyserial_or_port():
-    # Without a real COM port this raises; the simulator is always available.
-    sim = make_source("simulator")
-    assert sim is not None
-    # Raw-to-microvolt conversion is a sane, nonzero scale.
+def test_truncated_packets_do_not_crash():
+    # A raw-wave code with too few trailing bytes must not IndexError — it just
+    # yields no raw sample (the resync may reinterpret stray bytes; that's fine).
+    out = parse_thinkgear_payload(bytes([0x80, 2, 0x01]))
+    assert out["raw"] == []
+    # A short ASIC payload (claims 24 bytes, only 2 present) reads no bands, no crash.
+    out = parse_thinkgear_payload(bytes([0x83, 24, 0x00, 0x01]))
+    assert out["asic_power"] == {}
+
+
+def test_make_source_mindlink_branch_raises_on_bad_port():
+    # The mindlink branch must fail cleanly on a bogus/missing port (not hang or
+    # return the simulator); the simulator remains the always-available fallback.
+    with pytest.raises(Exception):
+        make_source("mindlink", port="__not_a_real_port__")
+    assert make_source("simulator") is not None
     assert RAW_TO_UV > 0

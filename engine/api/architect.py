@@ -11,7 +11,8 @@ reactions posted during play update that model for next time.
 """
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+import anyio
+from fastapi import APIRouter, HTTPException, Path
 from pydantic import BaseModel, Field
 
 from engine.architect.composer import get_composer
@@ -20,6 +21,10 @@ from engine.architect.script import Script
 from engine.assets.resolver import resolve_script_assets
 from engine.experience.state import store
 from engine.schemas import AffectState
+from engine.util import stable_seed
+
+# Stable, injection-safe player id (also the persistence key).
+PLAYER_ID = r"^[A-Za-z0-9_-]{1,64}$"
 
 router = APIRouter(tags=["architect"])
 
@@ -44,10 +49,12 @@ async def compose_script(sid: str, req: ComposeRequest) -> Script:
     player_store.save(pm)
 
     recent = sess.last_affect if req.use_recent_affect else None
-    script = get_composer().compose(sid, sess.seed, pm, req.length, recent)
+    # Composition can be a multi-second Claude round trip (or CPU work) — run it
+    # off the event loop so one compose doesn't stall other requests/streams.
+    script = await anyio.to_thread.run_sync(get_composer().compose, sid, sess.seed, pm, req.length, recent)
 
     if req.fresh_assets:
-        run_seed = abs(hash(f"{sid}:{pm.runs}")) % (2**31)
+        run_seed = stable_seed(sid, pm.runs)
         resolved = resolve_script_assets(script, run_seed, script.escalation)
         script.assets = {k: [a.model_dump() for a in v] for k, v in resolved.items()}
 
@@ -122,7 +129,7 @@ async def post_reaction(sid: str, r: ReactionRequest) -> LearnSummary:
 
 
 @router.get("/players/{player_id}", response_model=PlayerModel)
-async def get_player(player_id: str) -> PlayerModel:
+async def get_player(player_id: str = Path(..., pattern=PLAYER_ID)) -> PlayerModel:
     return player_store.load(player_id)
 
 

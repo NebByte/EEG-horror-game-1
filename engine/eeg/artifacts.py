@@ -41,8 +41,10 @@ def assess_quality(chunk: EEGChunk, poor_signal: int = 0) -> SignalQuality:
     high_freq = bp["beta"] + bp["gamma"]
     emg = high_freq > EMG_HIGH_FREQ
 
-    # MindLink poor_signal: 0 good .. 200 off-head. Turn it into a weight.
-    ps_conf = max(0.0, 1.0 - poor_signal / 200.0)
+    # MindLink poor_signal: 0 good .. 200 off-head. Clamp first so an out-of-range
+    # caller value can't push confidence above 1.0 (violating the contract).
+    poor_signal = max(0, min(200, poor_signal))
+    ps_conf = 1.0 - poor_signal / 200.0
     conf = ps_conf
     if motion:
         conf *= 0.0

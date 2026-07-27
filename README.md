@@ -25,7 +25,7 @@ affect — then **posts your reactions back so the model learns you as you play*
 > Windows-only, needed a heavy C++/CMake/vcpkg toolchain, and never built
 > cleanly. It's been **replaced by the browser client** above — same directives,
 > zero install, runs everywhere.
-
+>
 > **Status: prototype.** It runs end-to-end today with a built-in EEG simulator
 > and an offline mock asset provider — **no hardware and no cloud credentials
 > required**. See [`ROADMAP.md`](./ROADMAP.md) for the path to production.
@@ -83,7 +83,7 @@ scarers (copy), and **mutates/crosses them into brand-new personalized
 DataPoints** (e.g. a `crawler × render` hybrid) that join your catalog and feed
 the next script — so the game literally invents new horrors tuned to you.
 
-```
+```text
 POST /v1/sessions/{id}/script       compose the personalized game
 GET  /v1/sessions/{id}/script       the current Script
 POST /v1/sessions/{id}/reactions    feed a reaction -> the model learns you

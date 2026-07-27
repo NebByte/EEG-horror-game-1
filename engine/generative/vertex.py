@@ -59,7 +59,10 @@ class VertexProvider(AssetProvider):
                 )
                 return resp.text or "{}"
 
-            text = await asyncio.get_event_loop().run_in_executor(None, _call)
+            # Hard deadline: the google-genai SDK can hang on silent connections
+            # (NAT idle-eviction), so wrap the blocking call in wait_for.
+            text = await asyncio.wait_for(
+                asyncio.get_event_loop().run_in_executor(None, _call), timeout=30.0)
             text = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```")
             return json.loads(text)
         except Exception as exc:  # noqa: BLE001 — degrade to a deterministic spec

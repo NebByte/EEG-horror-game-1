@@ -7,9 +7,13 @@ from `(run_seed, datapoint_id, kind)` so a given run is internally consistent bu
 """
 from __future__ import annotations
 
+import logging
+
 from engine.architect.datapoints import DataPoint, get_datapoint
 from engine.assets.models import AssetKind, MediaAsset
 from engine.assets.sources import AssetSource, get_asset_source
+
+log = logging.getLogger("engine.assets.resolver")
 
 # Which asset kinds each DataPoint category resolves to.
 _KINDS_FOR_CATEGORY: dict[str, list[AssetKind]] = {
@@ -23,7 +27,9 @@ _KINDS_FOR_CATEGORY: dict[str, list[AssetKind]] = {
 
 
 def _seed(*parts) -> int:
-    return abs(hash("::".join(str(p) for p in parts))) % (2**31)
+    from engine.util import stable_seed
+
+    return stable_seed(*parts)
 
 
 class AssetResolver:
@@ -51,8 +57,8 @@ class AssetResolver:
             if dp_id not in lookup:
                 try:
                     lookup[dp_id] = DataPoint.model_validate(raw)
-                except Exception:
-                    pass
+                except Exception as exc:  # noqa: BLE001
+                    log.warning("failed to validate bred datapoint %s: %s", dp_id, exc)
         out: dict[str, list[MediaAsset]] = {}
         for beat in script.beats:
             for dp_id in beat.datapoint_ids:

@@ -20,6 +20,8 @@ from engine.assets.models import AssetKind, MediaAsset
 log = logging.getLogger("engine.assets.libraries")
 
 _HTTP_TIMEOUT = 12.0
+# Poly Haven's API ToS requires a unique, app-identifying User-Agent per caller.
+_USER_AGENT = "EEG-Horror-Engine/0.1 (+https://github.com/NebByte/EEG-horror-game-1)"
 
 
 def _http_get_json(url: str, params: dict | None = None, headers: dict | None = None):
@@ -91,7 +93,8 @@ class PolyHavenLibrary(LibrarySource):
     BASE = "https://api.polyhaven.com"
 
     def _search(self, kind, tags, fears):
-        data = _http_get_json(f"{self.BASE}/assets", params={"type": _POLYHAVEN_TYPE[kind]})
+        data = _http_get_json(f"{self.BASE}/assets", params={"type": _POLYHAVEN_TYPE[kind]},
+                              headers={"User-Agent": _USER_AGENT})
         items = _parse_polyhaven_assets(data or {})
         # Prefer assets whose categories intersect our tags (dark/industrial/etc).
         wanted = set(t.lower() for t in tags)
@@ -128,9 +131,12 @@ class FreesoundLibrary(LibrarySource):
         if not self.token:
             return []
         query = " ".join(dict.fromkeys((tags[:2] + fears[:1]) or ["horror ambience"]))
+        # Token in the Authorization header, not the query string (keeps the
+        # secret out of URLs/logs).
         data = _http_get_json(f"{self.BASE}/search/text/", params={
             "query": query, "fields": "id,name,license,username,previews,url",
-            "filter": "duration:[2.0 TO 60.0]", "page_size": 30, "token": self.token})
+            "filter": "duration:[2.0 TO 60.0]", "page_size": 30},
+            headers={"Authorization": f"Token {self.token}"})
         return _parse_freesound(data or {})
 
     def _to_asset(self, kind, item, seed):
@@ -165,10 +171,13 @@ class SketchfabLibrary(LibrarySource):
         q = " ".join(dict.fromkeys((tags[:2] + fears[:1]) or ["horror"]))
         if kind == "animation":
             q += " animated"
-        data = _http_get_json(f"{self.BASE}/search", params={
-            "type": "models", "q": q, "downloadable": "true",
-            "animated": "true" if kind == "animation" else None, "count": 24},
-            headers={"Authorization": f"Token {self.token}"})
+        # Build params without `animated` by default — httpx serialises None as an
+        # empty query value (`animated=`) rather than omitting it.
+        params = {"type": "models", "q": q, "downloadable": "true", "count": 24}
+        if kind == "animation":
+            params["animated"] = "true"
+        data = _http_get_json(f"{self.BASE}/search", params=params,
+                              headers={"Authorization": f"Token {self.token}"})
         return _parse_sketchfab(data or {})
 
     def _to_asset(self, kind, item, seed):

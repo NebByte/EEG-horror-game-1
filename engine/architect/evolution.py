@@ -25,7 +25,9 @@ MIN_REACTIONS_TO_BREED = 3
 
 
 def _seed(pm: PlayerModel) -> int:
-    return abs(hash((pm.player_id, pm.reactions_seen, pm.runs))) % (2**31)
+    from engine.util import stable_seed
+
+    return stable_seed(pm.player_id, pm.reactions_seen, pm.runs)
 
 
 def _short(dp_id: str) -> str:
@@ -87,7 +89,7 @@ def crossover(a: DataPoint, b: DataPoint, rng: random.Random) -> DataPoint:
 
 def synthesize_for_player(pm: PlayerModel, base: list[DataPoint] | None = None) -> list[DataPoint]:
     """Breed new, personalized DataPoints from the player's top performers."""
-    base = base or CATALOG
+    base = CATALOG if base is None else base
     if pm.reactions_seen < MIN_REACTIONS_TO_BREED:
         return []
     rng = random.Random(_seed(pm))
@@ -124,7 +126,7 @@ def _with_learned_enhances(dp: DataPoint, pm: PlayerModel) -> DataPoint:
 def evolved_catalog(pm: PlayerModel, base: list[DataPoint] | None = None) -> list[DataPoint]:
     """The player's personalized catalog: base DataPoints (with learned enhance
     links merged in) plus the synthesized ones."""
-    base = base or CATALOG
+    base = CATALOG if base is None else base
     merged_base = [_with_learned_enhances(d, pm) for d in base]
     return merged_base + synthesize_for_player(pm, base)
 

@@ -35,7 +35,9 @@ _ARC: list[tuple[Mood, float]] = [
 
 
 def _seed_int(*parts) -> int:
-    return abs(hash("::".join(str(p) for p in parts))) % (2**31)
+    from engine.util import stable_seed
+
+    return stable_seed(*parts)
 
 
 class MockComposer:
@@ -201,7 +203,9 @@ class AnthropicComposer(MockComposer):
             '"target_tension":0.0-1.0,"datapoint_ids":["..."],"note":"..."}],"rationale":"..."}'
         )
         try:
-            msg = self._client.messages.create(
+            # Request-level timeout so a hung upstream can't stall composition
+            # before the mock fallback runs.
+            msg = self._client.with_options(timeout=25.0).messages.create(
                 model=self.settings.architect_model,
                 max_tokens=2000,
                 messages=[{"role": "user", "content": prompt}],

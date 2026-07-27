@@ -28,8 +28,8 @@ def test_motion_spike_flagged_as_artifact():
     samples[128].channels = [500.0]  # 500 uV spike
     chunk = EEGChunk(sample_rate_hz=256, channel_names=["FP1"], samples=samples)
     q = assess_quality(chunk)
-    assert q.motion or q.blink
-    assert q.confidence < 0.5
+    assert q.motion  # a 500 uV spike is unambiguous motion/clipping
+    assert not q.ok
 
 
 def test_poor_signal_lowers_confidence():

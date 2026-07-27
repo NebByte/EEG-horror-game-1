@@ -68,7 +68,9 @@ def _relative_band_powers(signal: np.ndarray, fs: float, method: str = "welch") 
     signal = signal - signal.mean(axis=-1, keepdims=True)
     freqs, psd = (_welch_psd if method == "welch" else _periodogram)(signal, fs)
 
-    total = psd[(freqs >= 0.5) & (freqs <= 45.0)].sum()
+    # Upper bound exclusive to match the band masks (gamma is < 45), so the
+    # relative powers sum to ~1.0 rather than leaking into a 45 Hz bin.
+    total = psd[(freqs >= 0.5) & (freqs < 45.0)].sum()
     if total <= 0:
         return {b: 0.0 for b in BANDS}
 
@@ -95,8 +97,13 @@ def frontal_alpha_asymmetry(chunk: EEGChunk) -> float:
         bp = _relative_band_powers(mat[idx : idx + 1], chunk.sample_rate_hz)
         return bp["alpha"]
 
-    left = next((i for i, n in enumerate(names) if n in ("AF3", "F3", "FP1")), 0)
-    right = next((i for i, n in enumerate(names) if n in ("AF4", "F4", "FP2")), min(1, mat.shape[0] - 1))
+    # Only compute FAA from genuine, distinct left/right frontal channels — never
+    # substitute an arbitrary channel (e.g. C3/C4), which would feed a non-frontal
+    # asymmetry into valence. Otherwise report 0 (no approach/withdrawal signal).
+    left = next((i for i, n in enumerate(names) if n in ("AF3", "F3", "FP1")), None)
+    right = next((i for i, n in enumerate(names) if n in ("AF4", "F4", "FP2")), None)
+    if left is None or right is None or left == right:
+        return 0.0
     al, ar = alpha_of(left), alpha_of(right)
     eps = 1e-6
     return float(np.log(ar + eps) - np.log(al + eps))

@@ -15,12 +15,16 @@ survives restarts (that's the "learns you over time" loop).
 from __future__ import annotations
 
 import json
+import logging
+import os
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
 from engine.architect.datapoints import get_datapoint
 from engine.config import get_settings
+
+log = logging.getLogger("engine.architect.learning")
 
 # How fast scores adapt to new evidence, and where the neutral prior sits.
 LEARN_RATE = 0.25
@@ -112,14 +116,20 @@ class PlayerStore:
         p = self._path(player_id)
         if p.exists():
             try:
-                return PlayerModel.model_validate_json(p.read_text())
-            except Exception:
-                pass  # corrupt file -> start fresh
+                return PlayerModel.model_validate_json(p.read_text(encoding="utf-8"))
+            except Exception as exc:  # noqa: BLE001 — corrupt file -> start fresh
+                log.warning("player model %s unreadable (%s); starting fresh.", p, exc)
         return PlayerModel(player_id=player_id)
 
     def save(self, model: PlayerModel) -> None:
+        # UTF-8 (fears/tags may be non-ASCII) + atomic replace so an interleaved
+        # write (a save per reaction) can't leave a truncated file that `load`
+        # would silently reset to a fresh model, losing all learning.
         self.root.mkdir(parents=True, exist_ok=True)
-        self._path(model.player_id).write_text(model.model_dump_json(indent=2))
+        dest = self._path(model.player_id)
+        tmp = dest.with_suffix(".json.tmp")
+        tmp.write_text(model.model_dump_json(indent=2), encoding="utf-8")
+        os.replace(tmp, dest)
 
 
 player_store = PlayerStore()

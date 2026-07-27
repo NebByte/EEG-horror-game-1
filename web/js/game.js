@@ -39,7 +39,7 @@
     for (let x = 0; x < MAPW; x++) { wall(x, 0, 1); wall(x, MAPH - 1, 1); }
     for (let y = 0; y < MAPH; y++) { wall(0, y, 1); wall(MAPW - 1, y, 1); }
 
-    const wtype = () => 1 + (rng() * 3 | 0); // 1..3 texture variants
+    const wtype = () => 1 + (rng() * 4 | 0); // 1..4 texture variants (all 4 reachable)
 
     if (spaceType === "atrium") {
       // open hall with a ring of pillars + a few stubs
@@ -190,7 +190,6 @@
     flr.addColorStop(0, "#050506"); flr.addColorStop(1, `rgb(${mr * 0.05 | 0},${mg * 0.05 | 0},${mb * 0.06 | 0})`);
     ctx.fillStyle = flr; ctx.fillRect(0, H / 2, W, H / 2);
 
-    const sin0 = Math.sin(player.a), cos0 = Math.cos(player.a);
     for (let col = 0; col < W; col++) {
       const camX = (2 * col) / W - 1;
       const ang = player.a + Math.atan(camX * Math.tan(FOV / 2));
@@ -233,7 +232,6 @@
       ctx.fillStyle = `rgba(${mr * 0.5 | 0},${mg * 0.35 | 0},${mb * 0.35 | 0},${dark})`;
       ctx.fillRect(col, y0, 1, wallH);
     }
-    void sin0; void cos0;
     drawMonster();
     drawGrain();
   }
@@ -282,7 +280,7 @@
 
   let grainCanvas, grainCtx, grainImg;
   function drawGrain() {
-    if (!grainCanvas || grainCanvas.width !== W) {
+    if (!grainCanvas || grainCanvas.width !== W || grainCanvas.height !== Math.max(1, H)) {
       grainCanvas = document.createElement("canvas"); grainCanvas.width = W; grainCanvas.height = Math.max(1, H);
       grainCtx = grainCanvas.getContext("2d"); grainImg = grainCtx.createImageData(W, Math.max(1, H));
     }
@@ -387,9 +385,12 @@
     engine.playerId = loadPlayerId();
     setConn(false, "connecting…");
     try {
+      // fetch only rejects on network error — treat a 4xx/5xx as failure too.
+      const json = async (r) => { if (!r.ok) throw new Error("HTTP " + r.status); return r.json(); };
       const seed = { theme: "abandoned asylum", fears: ["darkness", "being watched", "being chased"] };
       let r = await fetch(engine.url + "/v1/sessions", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ seed, player_id: engine.playerId }) });
-      engine.sid = (await r.json()).id;
+      engine.sid = (await json(r)).id;
+      if (!engine.sid) throw new Error("no session id");
       await fetch(engine.url + "/v1/sessions/" + engine.sid + "/generate", { method: "POST" });
       // quick resting calibration so affect is centered on this player
       try {
@@ -398,7 +399,7 @@
       } catch (e) {}
       // compose the personalized Script (the Architect authors the game)
       r = await fetch(engine.url + "/v1/sessions/" + engine.sid + "/script", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ length: 8 }) });
-      engine.script = await r.json(); engine.beat = 0; engine.beatT = 0;
+      engine.script = await json(r); engine.beat = 0; engine.beatT = 0;
       applyBeat(engine.script.beats[0], engine.script);
       updateArchitectHUD();
       refreshLearning();
@@ -420,7 +421,7 @@
       // EEG window (synthetic), plus optional fused webcam affect + signal quality.
       const frame = bandsForArousal(Math.max(fearSlider(), affect.arousal), affect.valence);
       if (cv.on && cv.conf > 0) frame.cv = { arousal: cv.arousal, valence: cv.valence, surprise: cv.surprise, fear: cv.fear, confidence: cv.conf };
-      frame.poor_signal = cv.on ? 0 : 0; // MindLink would report real contact quality here
+      frame.poor_signal = 0; // a real MindLink would report contact quality here
       engine.ws.send(JSON.stringify(frame));
     }, 500);
   }
@@ -458,14 +459,16 @@
     // space -> resolved map asset (layout / palette / fog / geometry vary per run)
     const spaceDp = beat.datapoint_ids.find((d) => d.startsWith("space."));
     const mapA = spaceDp ? asset(script, spaceDp, "map") : null;
-    let spaceType = (mapA && mapA.params.layout) || SPACE_OF[spaceDp] || currentSpace || "corridor";
+    const mapParams = (mapA && mapA.params) || {};
+    let spaceType = mapParams.layout || SPACE_OF[spaceDp] || currentSpace || "corridor";
     if (spaceType === "catacomb") spaceType = "maze"; if (spaceType === "ward") spaceType = "room";
-    const mapSeed = mapA ? mapA.params.geometry_seed : (spaceDp || "") + ":" + beat.index;
+    const mapSeed = mapParams.geometry_seed != null ? mapParams.geometry_seed : (spaceDp || "") + ":" + beat.index;
     if (spaceType !== currentSpace || mapSeed !== currentMapSeed) {
       currentSpace = spaceType; currentMapSeed = mapSeed;
-      const pal = mapA && mapA.params.palette ? hex2rgb(mapA.params.palette[1] || mapA.params.palette[0]) : null;
+      const pp = mapParams.palette || [];
+      const pal = pp.length ? hex2rgb(pp[1] || pp[0]) : null;
       rebuildLevel(spaceType, String(mapSeed), pal);
-      if (mapA && mapA.params.fog != null) scene.baseFog = mapA.params.fog;
+      if (mapParams.fog != null) scene.baseFog = mapParams.fog;
     }
 
     // encounter -> resolved character asset (silhouette / speed vary per run)
@@ -666,7 +669,8 @@
   function updateHUD() {
     for (const k in fills) { const v = clamp(affect[k] || 0); const m = fills[k]; m.querySelector(".fill").style.width = (v * 100).toFixed(0) + "%"; m.querySelector(".fill").style.background = HUE[k]; m.querySelector(".v").textContent = v.toFixed(2); }
     const moodEl = document.getElementById("mood"); moodEl.textContent = scene.mood;
-    moodEl.style.color = `rgb(${MOOD_COLOR[scene.mood].map((c) => Math.min(255, c + 90)).join(",")})`;
+    const mc = MOOD_COLOR[scene.mood] || scene.palette || [140, 150, 168];
+    moodEl.style.color = `rgb(${mc.map((c) => Math.min(255, c + 90) | 0).join(",")})`;
     document.getElementById("s-int").textContent = scene.intensity.toFixed(2);
     document.getElementById("s-bpm").textContent = scene.bpm.toFixed(0);
     document.getElementById("s-space").textContent = scene.spaceType;
@@ -685,11 +689,16 @@
       const b = engine.script.beats[engine.beat];
       beatEl.textContent = (engine.beat + 1); beatsEl.textContent = engine.script.beats.length;
       amood.textContent = b.mood;
-      els.innerHTML = (b.note || "").split(" · ").filter(Boolean).map((n) => `<span class="tag">${n}</span>`).join("");
+      // note is Claude-authored free text — build text nodes, never innerHTML.
+      els.replaceChildren(...(b.note || "").split(" · ").filter(Boolean).map((n) => {
+        const s = document.createElement("span"); s.className = "tag"; s.textContent = n; return s;
+      }));
       rat.textContent = engine.script.rationale || "";
     } else {
       beatEl.textContent = "–"; beatsEl.textContent = "–"; amood.textContent = scene.mood;
-      els.innerHTML = '<span class="tag">standalone sim</span><span class="tag">no server</span>';
+      els.replaceChildren(...["standalone sim", "no server"].map((t) => {
+        const s = document.createElement("span"); s.className = "tag"; s.textContent = t; return s;
+      }));
       rat.textContent = "Switch to “Live engine” to have the Architect compose a personalized script.";
     }
   }
@@ -701,8 +710,11 @@
   function setLearning(count, top) {
     document.getElementById("l-count").textContent = count || 0;
     const el = document.getElementById("l-top");
-    if (top && top.length) el.innerHTML = "top scare: <b>" + (top[0][0] || "").replace(/^.*\./, "") + "</b>";
-    else el.innerHTML = "";
+    el.textContent = "";
+    if (top && top.length) {
+      const b = document.createElement("b"); b.textContent = (top[0][0] || "").replace(/^.*\./, "");
+      el.append("top scare: ", b);  // DataPoint id may be breeder-generated — text only
+    }
   }
   let pulseT = 0;
   function showLearnPulse() { const p = document.getElementById("l-pulse"); p.classList.add("on"); pulseT = performance.now() / 1000; }
@@ -733,8 +745,11 @@
   }
 
   // ------------------------------------------------------------- controls ----
-  window.addEventListener("keydown", (e) => { keys[e.key.toLowerCase()] = true; if (e.key === "Escape" && document.pointerLockElement) document.exitPointerLock(); });
-  window.addEventListener("keyup", (e) => (keys[e.key.toLowerCase()] = false));
+  // Ignore keystrokes aimed at form controls (e.g. typing the engine URL) so
+  // they don't drive the avatar or latch movement keys.
+  const typingInField = (e) => /^(input|textarea|select)$/i.test(e.target && e.target.tagName);
+  window.addEventListener("keydown", (e) => { if (typingInField(e)) return; keys[e.key.toLowerCase()] = true; if (e.key === "Escape" && document.pointerLockElement) document.exitPointerLock(); });
+  window.addEventListener("keyup", (e) => { if (typingInField(e)) return; keys[e.key.toLowerCase()] = false; });
   document.addEventListener("mousemove", (e) => { if (document.pointerLockElement === canvas) player.a += e.movementX * 0.0025; });
   canvas.addEventListener("click", () => canvas.requestPointerLock && canvas.requestPointerLock());
 

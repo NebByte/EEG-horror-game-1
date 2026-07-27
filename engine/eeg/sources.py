@@ -56,7 +56,7 @@ def parse_thinkgear_payload(payload: bytes) -> dict:
             out["meditation"] = payload[i + 1]; i += 2
         elif code == CODE_BLINK and i + 1 < n:
             out["blink"] = payload[i + 1]; i += 2
-        elif code == CODE_RAW_WAVE and i + 2 < n:
+        elif code == CODE_RAW_WAVE and i + 3 < n:
             length = payload[i + 1]  # always 2 for raw wave
             val = (payload[i + 2] << 8) | payload[i + 3]
             if val >= 32768:
@@ -67,7 +67,9 @@ def parse_thinkgear_payload(payload: bytes) -> dict:
             length = payload[i + 1]  # 24
             data = payload[i + 2 : i + 2 + length]
             bands = {}
-            for b in range(min(8, length // 3)):
+            # Iterate against the *actual* slice length so a truncated packet
+            # can't index past `data`.
+            for b in range(min(8, length // 3, len(data) // 3)):
                 o = b * 3
                 bands[ASIC_BANDS[b]] = (data[o] << 16) | (data[o + 1] << 8) | data[o + 2]
             out["asic_power"] = bands

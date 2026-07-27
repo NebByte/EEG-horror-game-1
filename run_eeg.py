@@ -18,13 +18,16 @@ WS = "ws://localhost:8000"
 
 
 async def main() -> None:
-    # Wait for the engine to be up.
+    # Wait for the engine to be up (require a real 200, not just a response).
     for _ in range(30):
         try:
-            httpx.get(f"{BASE}/v1/health", timeout=1.0)
-            break
+            if httpx.get(f"{BASE}/v1/health", timeout=1.0).status_code == 200:
+                break
         except Exception:
-            await asyncio.sleep(0.5)
+            pass
+        await asyncio.sleep(0.5)
+    else:
+        raise RuntimeError(f"engine health check never succeeded at {BASE} — is it running?")
 
     sid = await create_session(BASE, seed={"theme": "abandoned asylum",
                                            "fears": ["darkness", "being watched"]})
@@ -41,17 +44,19 @@ async def main() -> None:
 
     print(f"session {sid} — streaming EEG ({kind})...\n")
     n = 0
-    async for frame in run_gateway(src, sid, WS, window_seconds=2.0):
-        a = frame["affect"]
-        print(f"[{n}] fear={a['fear']:.2f} stress={a['stress']:.2f} "
-              f"arousal={a['arousal']:.2f} relax={a['relaxation']:.2f} "
-              f"-> {frame['mood']} intensity={frame['intensity']:.2f} "
-              f"spawn={frame['spawn_character_id']} "
-              f"{'BACKOFF' if frame['safety_backoff'] else ''}")
-        n += 1
-        if n >= 8:
-            break
-    await src.close()
+    try:
+        async for frame in run_gateway(src, sid, WS, window_seconds=2.0):
+            a = frame["affect"]
+            print(f"[{n}] fear={a['fear']:.2f} stress={a['stress']:.2f} "
+                  f"arousal={a['arousal']:.2f} relax={a['relaxation']:.2f} "
+                  f"-> {frame['mood']} intensity={frame['intensity']:.2f} "
+                  f"spawn={frame['spawn_character_id']} "
+                  f"{'BACKOFF' if frame['safety_backoff'] else ''}")
+            n += 1
+            if n >= 8:
+                break
+    finally:
+        await src.close()  # always release the serial connection
     print("\nLIVE BRAIN -> HORROR ENGINE: OK")
 
 

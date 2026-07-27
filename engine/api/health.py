@@ -16,7 +16,7 @@ async def health() -> dict:
     from engine.assets.sources import get_asset_source
 
     src = get_asset_source()
-    libs = [getattr(l, "name", "?") for l in getattr(src, "libraries", [])]
+    libs = [getattr(lib, "name", "?") for lib in getattr(src, "libraries", [])]
     return {
         "status": "ok",
         "version": __version__,

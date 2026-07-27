@@ -17,10 +17,15 @@ def _clamp(x: float, lo: float = 0.0, hi: float = 1.0) -> float:
 
 
 def compute_baseline(chunks: list[EEGChunk]) -> AffectState:
-    """Average the resting windows into a baseline AffectState."""
-    if not chunks:
-        return AffectState(arousal=0.2, relaxation=0.6)
-    affects = [affect_from_bands(band_powers(c)) for c in chunks]
+    """Average the resting windows into a baseline AffectState.
+
+    Raises ValueError if no chunk carries usable samples — otherwise we'd store a
+    fabricated neutral baseline and silently apply calibration offsets as if it
+    had succeeded."""
+    usable = [c for c in chunks if c.samples]
+    if not usable:
+        raise ValueError("no usable EEG samples in the calibration windows")
+    affects = [affect_from_bands(band_powers(c)) for c in usable]
     n = len(affects)
     avg = {k: sum(getattr(a, k) for a in affects) / n
            for k in ("fear", "stress", "arousal", "engagement", "relaxation", "valence")}
