@@ -45,3 +45,7 @@ htmlcov/
 .DS_Store
 .idea/
 .vscode/
+
+# --- Vendored browser deps (Three.js) — shipped with the game, MUST be tracked ---
+!web/vendor/three/build/
+!web/vendor/three/build/*.js

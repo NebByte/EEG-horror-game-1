@@ -1,0 +1,69 @@
+"""Environment-driven settings for the engine.
+
+All values have sensible defaults so the prototype runs offline with no cloud
+credentials and no headset. Override via environment variables or a `.env` file.
+"""
+from __future__ import annotations
+
+from functools import lru_cache
+
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="ignore")
+
+    # --- API ---
+    environment: str = "development"
+    api_prefix: str = "/v1"
+
+    # --- Generative asset provider ---
+    # "mock"  -> fully offline, deterministic (default)
+    # "vertex" -> Google Cloud Vertex AI (optional, requires extra deps + creds)
+    asset_provider: str = "mock"
+
+    # --- Google Cloud (only used when asset_provider == "vertex") ---
+    gcp_project: str = ""
+    gcp_location: str = "us-central1"
+    vertex_text_model: str = "gemini-2.5-flash"
+    vertex_image_model: str = "gemini-2.5-flash-image"
+    vertex_music_model: str = "lyria-002"
+    audio_provider: str = "none"
+    google_application_credentials: str = ""
+    gcs_bucket: str = ""
+
+    # --- Architect (the "script" composer) ---
+    # "anthropic"-> Claude composes the script (default). It degrades to the mock
+    #               composer automatically when no API key / SDK is present, so a
+    #               fresh install runs either way — pasting a key just turns it live.
+    # "mock"     -> force the deterministic offline composer.
+    architect_provider: str = "anthropic"
+    architect_model: str = "claude-opus-4-8"
+    anthropic_api_key: str = ""
+    # Where per-player learning models are persisted (JSON).
+    player_data_dir: str = "data/players"
+
+    # --- Asset resolution (fresh assets every run) ---
+    # "libraries"  -> open-asset libraries (default). Only the **keyless** sources
+    #                 (Poly Haven CC0 + curated CC0 packs) are enabled by default,
+    #                 each falling back to procedural per asset kind.
+    # "procedural" -> infinite offline variants, no network.
+    asset_source: str = "libraries"
+    # Enabled libraries, in priority order. Keyless by default; add "freesound"
+    # and/or "sketchfab" here once you set their API keys below.
+    asset_libraries: str = "polyhaven,cc0pack"
+    freesound_api_key: str = ""
+    sketchfab_api_key: str = ""
+
+    # --- EEG signal processing ---
+    eeg_sample_rate_hz: int = 256
+    eeg_window_seconds: float = 2.0
+
+    # --- Safety ---
+    # Sustained stress above this ceiling triggers the experience back-off.
+    stress_safety_ceiling: float = 0.9
+
+
+@lru_cache
+def get_settings() -> Settings:
+    return Settings()

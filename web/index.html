@@ -1,0 +1,1631 @@
+<!doctype html>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+<title>THE BACKROOMS — Level 0 · EEG Horror Engine</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ctext y='13' font-size='13'%3E%F0%9F%A7%A0%3C/text%3E%3C/svg%3E" />
+
+<style>
+  :root { --accent: #d8c34a; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; overflow: hidden; background: #000; }
+  body { font-family: "Courier New", monospace; color: #e8e2c0; cursor: default; }
+  canvas { display: block; }
+
+  #app { position: fixed; inset: 0; }
+
+  /* ---------- Overlays ---------- */
+  .overlay {
+    position: fixed; inset: 0; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; text-align: center;
+    z-index: 20; padding: 6vh 8vw; user-select: none;
+  }
+  .hidden { display: none !important; }
+
+  #menu {
+    background:
+      radial-gradient(120% 120% at 50% 0%, rgba(60,54,20,0.35), rgba(0,0,0,0.92) 70%),
+      #05050a;
+  }
+  #menu h1 {
+    font-size: clamp(2.4rem, 8vw, 6rem); letter-spacing: 0.35em; margin-left: 0.35em;
+    color: var(--accent); text-shadow: 0 0 18px rgba(216,195,74,0.55), 0 0 3px #000;
+    animation: flickerText 6s infinite;
+  }
+  #menu h2 { font-size: clamp(0.9rem,2.5vw,1.3rem); letter-spacing: 0.5em; margin: 0.4em 0 2em; color:#8a865f; }
+  .card {
+    max-width: 640px; background: rgba(10,10,6,0.55); border: 1px solid rgba(216,195,74,0.25);
+    padding: 1.6rem 2rem; margin-bottom: 2rem; line-height: 1.9; font-size: 0.95rem; color:#cfc9a0;
+    box-shadow: 0 0 40px rgba(0,0,0,0.8) inset;
+  }
+  .keys { display:flex; flex-wrap:wrap; gap:.5rem 1.2rem; justify-content:center; margin-top:.4rem; }
+  .key { border:1px solid #4a462c; padding:.15rem .55rem; border-radius:4px; color:#e8e2c0; background:#141208; }
+  .btn {
+    font-family: inherit; font-size: 1.1rem; letter-spacing: 0.25em; color: #0a0a06;
+    background: var(--accent); border: none; padding: 0.9rem 2.4rem; cursor: pointer;
+    text-transform: uppercase; transition: transform .1s, box-shadow .2s;
+    box-shadow: 0 0 24px rgba(216,195,74,0.6);
+  }
+  .btn:hover { transform: translateY(-2px); box-shadow: 0 0 40px rgba(216,195,74,0.9); }
+  .btn-alt { margin-top: 0.9rem; background: transparent; color: var(--accent);
+    border: 1px solid rgba(216,195,74,0.55); box-shadow: none; font-size: 0.85rem; padding: 0.6rem 1.6rem; }
+  .btn-alt:hover { background: rgba(216,195,74,0.12); box-shadow: 0 0 20px rgba(216,195,74,0.4); }
+  .note { margin-top: 1.6rem; font-size: 0.72rem; color: #6b673f; letter-spacing:0.08em; }
+
+  #pause h1 { color:#cfc9a0; letter-spacing:.3em; font-size:2rem; margin-bottom:1.4rem; }
+
+  #dead { background: radial-gradient(circle at 50% 45%, rgba(90,0,0,0.55), #000 65%); }
+  #dead h1 { color:#a01010; font-size: clamp(3rem,12vw,8rem); letter-spacing:.15em;
+    text-shadow:0 0 26px rgba(200,0,0,.8); animation:shake .12s infinite; }
+  #dead p { color:#7a5555; margin:1.2rem 0 2rem; letter-spacing:.1em; }
+
+  #won { background: radial-gradient(circle at 50% 45%, rgba(20,60,30,0.5), #000 65%); }
+  #won h1 { color:#7bd88a; font-size: clamp(2.4rem,9vw,6rem); letter-spacing:.15em; text-shadow:0 0 24px rgba(60,220,120,.6); }
+  #won p { color:#8aa892; margin:1.2rem 0 2rem; }
+
+  /* ---------- HUD ---------- */
+  #hud { position: fixed; inset: 0; z-index: 10; pointer-events: none; }
+  #crosshair {
+    position:absolute; left:50%; top:50%; width:6px; height:6px; margin:-3px 0 0 -3px;
+    background: rgba(232,226,192,0.7); border-radius:50%;
+    box-shadow: 0 0 4px rgba(0,0,0,0.9); opacity:.7;
+  }
+  .bars { position:absolute; left:26px; bottom:24px; width:230px; }
+  .bar-wrap { margin-bottom:12px; }
+  .bar-label { font-size:.68rem; letter-spacing:.28em; color:#b8b389; margin-bottom:4px; text-shadow:0 0 4px #000; }
+  .bar { height:10px; background:rgba(0,0,0,0.55); border:1px solid rgba(216,195,74,0.3); overflow:hidden; }
+  .bar > span { display:block; height:100%; width:100%; transition: width .12s linear; }
+  #sanityFill { background: linear-gradient(90deg,#5a2a2a,#c94a4a); }
+  #staminaFill { background: linear-gradient(90deg,#3a4a2a,#8ac94a); }
+  #objective {
+    position:absolute; top:22px; left:50%; transform:translateX(-50%); text-align:center;
+    font-size:.82rem; letter-spacing:.22em; color:#cfc9a0; text-shadow:0 0 6px #000, 0 0 14px rgba(0,0,0,.8);
+  }
+  #objective b { color: var(--accent); }
+  #compass {
+    position:absolute; top:52px; left:50%; transform:translateX(-50%);
+    text-align:center; opacity:0; transition:opacity .3s;
+  }
+  #compassArrow {
+    font-size:1.5rem; line-height:1; color:var(--accent);
+    text-shadow:0 0 8px rgba(216,195,74,.7), 0 0 3px #000;
+    transition: transform .12s linear;
+  }
+  #compassDist { font-size:.7rem; letter-spacing:.2em; color:#b8b389; margin-top:2px; text-shadow:0 0 4px #000; }
+  /* ---- Mind Link biofeedback panel ---- */
+  #mindlink {
+    position:absolute; top:16px; right:16px; width:252px; padding:10px 12px;
+    background:rgba(6,8,12,0.72); border:1px solid rgba(216,195,74,0.32);
+    box-shadow:0 0 22px rgba(0,0,0,0.7) inset; backdrop-filter:blur(2px);
+  }
+  .ml-head { font-size:.72rem; letter-spacing:.24em; color:var(--accent); display:flex; justify-content:space-between; align-items:center; }
+  #mlStatus { font-size:.62rem; letter-spacing:.14em; padding:1px 6px; border-radius:3px; }
+  #mlStatus.sim  { color:#e8c14a; border:1px solid #e8c14a55; }
+  #mlStatus.live { color:#4ade80; border:1px solid #4ade8066; text-shadow:0 0 8px #4ade80; }
+  #mlGraph { display:block; width:100%; height:88px; margin:8px 0 6px; background:rgba(0,0,0,0.4); border:1px solid rgba(216,195,74,0.15); }
+  .ml-row { display:flex; align-items:center; gap:6px; font-size:.6rem; letter-spacing:.14em; color:#b8b389; margin:3px 0; }
+  .ml-row > span { width:42px; }
+  .ml-bar { flex:1; height:7px; background:rgba(0,0,0,0.55); border:1px solid rgba(216,195,74,0.25); overflow:hidden; }
+  .ml-bar > i { display:block; height:100%; width:0%; transition:width .1s linear; }
+  #mlFear { background:linear-gradient(90deg,#5a1a1a,#ff3b3b); }
+  #mlAtt  { background:linear-gradient(90deg,#1a3a5a,#4aa8ff); }
+  #mlMed  { background:linear-gradient(90deg,#1a4a3a,#4ade80); }
+  #mlScared { margin-top:7px; font-size:.64rem; letter-spacing:.12em; color:#cf9a9a; min-height:1em; }
+  #mlScared b { color:#ff6a6a; }
+  #message {
+    position:absolute; top:60%; left:50%; transform:translateX(-50%);
+    font-size:1.05rem; letter-spacing:.18em; color:#e8e2c0; text-shadow:0 0 10px #000;
+    opacity:0; transition: opacity .5s; text-align:center; max-width:80vw;
+  }
+  #flash { position:fixed; inset:0; z-index:15; pointer-events:none; background:#fff; opacity:0; }
+  #dark  { position:fixed; inset:0; z-index:14; pointer-events:none; background:#000; opacity:0; }
+
+  @keyframes flickerText {
+    0%,19%,21%,23%,55%,57%,100% { opacity:1; }
+    20%,22%,56% { opacity:.35; }
+  }
+  @keyframes shake { 0%{transform:translate(0,0)}25%{transform:translate(-2px,1px)}
+    50%{transform:translate(2px,-1px)}75%{transform:translate(-1px,-2px)}100%{transform:translate(1px,2px)} }
+
+  #loader { position:fixed; inset:0; z-index:30; display:flex; align-items:center; justify-content:center;
+    background:#05050a; color:#8a865f; letter-spacing:.3em; font-size:.9rem; }
+</style>
+
+<div id="app"></div>
+
+<div id="loader">ENTERING&nbsp;THE&nbsp;BACKROOMS…</div>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div id="crosshair"></div>
+  <div id="objective"></div>
+  <div id="compass"><div id="compassArrow">▲</div><div id="compassDist"></div></div>
+  <div id="mindlink" class="hidden">
+    <div class="ml-head">MIND&nbsp;LINK <span id="mlStatus" class="sim">SIM</span></div>
+    <canvas id="mlGraph" width="240" height="88"></canvas>
+    <div class="ml-row"><span>FEAR</span><div class="ml-bar"><i id="mlFear"></i></div></div>
+    <div class="ml-row"><span>FOCUS</span><div class="ml-bar"><i id="mlAtt"></i></div></div>
+    <div class="ml-row"><span>CALM</span><div class="ml-bar"><i id="mlMed"></i></div></div>
+    <div id="mlScared"></div>
+  </div>
+  <div id="message"></div>
+  <div class="bars">
+    <div class="bar-wrap">
+      <div class="bar-label">SANITY</div>
+      <div class="bar"><span id="sanityFill"></span></div>
+    </div>
+    <div class="bar-wrap">
+      <div class="bar-label">STAMINA</div>
+      <div class="bar"><span id="staminaFill"></span></div>
+    </div>
+  </div>
+</div>
+
+<div id="dark"></div>
+<div id="flash"></div>
+
+<!-- Menus -->
+<div id="menu" class="overlay">
+  <h1>BACKROOMS</h1>
+  <h2>LEVEL&nbsp;0</h2>
+  <div class="card">
+    You noclipped out of reality into an <b>endless</b> maze — mono-yellow rooms,
+    damp carpet, the ceaseless buzz of fluorescent light, in every direction forever.<br /><br />
+    Find <b>3 bottles of Almond Water</b> to stay sane, then reach the <b>Exit</b>.
+    The <b>compass</b> at the top points to your goal. Something else wanders here —
+    <b>keep it in your sight, for it cannot move while you watch it.</b>
+    If it catches you, you're gone.
+    <div class="keys">
+      <span class="key">W A S D — Move</span>
+      <span class="key">Mouse — Look</span>
+      <span class="key">Shift — Sprint</span>
+      <span class="key">F — Flashlight</span>
+      <span class="key">Esc — Pause</span>
+    </div>
+  </div>
+  <button class="btn" id="startBtn">Enter</button>
+  <button class="btn btn-alt" id="mlConnectBtn">🧠 Connect Mind Link</button>
+  <div class="note">Best with headphones · Click to lock the mouse · Runs fully offline</div>
+  <div class="note">Mind Link is optional — a real NeuroSky headset is read by the engine over its serial/COM port (start the engine first), and your brain drives the fear. Play without it and the game simulates it.</div>
+</div>
+
+<div id="pause" class="overlay hidden">
+  <h1>PAUSED</h1>
+  <button class="btn" id="resumeBtn">Resume</button>
+  <button class="btn btn-alt" id="mlConnectBtn2">🧠 Connect Mind Link</button>
+</div>
+
+<div id="dead" class="overlay hidden">
+  <h1>CAUGHT</h1>
+  <p>The hum stops. So do you.</p>
+  <button class="btn" id="retryBtn">Try Again</button>
+</div>
+
+<div id="won" class="overlay hidden">
+  <h1>YOU ESCAPED</h1>
+  <p>…for now.</p>
+  <button class="btn" id="playAgainBtn">Play Again</button>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "./vendor/three/build/three.module.js",
+    "three/addons/": "./vendor/three/addons/"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { PointerLockControls } from 'three/addons/controls/PointerLockControls.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
+import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+
+/* ============================================================
+   CONFIG
+============================================================ */
+const CELL = 4;                 // metres per grid cell
+const WALL_H = 3.0;             // wall / ceiling height
+const EYE_H = 1.68;             // camera height
+const ROOM = 6;                 // cells between room-divider walls
+const VIEW = 92;                // world-streaming radius in metres (a bit past the fog)
+const CR = Math.ceil(VIEW / CELL); // streaming radius in cells
+
+const PLAYER_R   = 0.85;
+const WALK_SPEED = 3.3;
+const SPRINT_SPEED = 6.3;
+const ENTITY_R   = 0.6;          // monster collision radius
+const PICKUPS_NEEDED = 3;
+
+/* ============================================================
+   PROCEDURAL TEXTURES  (canvas → CanvasTexture, no assets)
+============================================================ */
+function noiseOverlay(ctx, w, h, amount, alpha) {
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  for (let i = 0; i < d.length; i += 4) {
+    const n = (Math.random() - 0.5) * amount;
+    d[i]   = clamp255(d[i]   + n);
+    d[i+1] = clamp255(d[i+1] + n);
+    d[i+2] = clamp255(d[i+2] + n);
+  }
+  ctx.putImageData(img, 0, 0);
+  if (alpha) { /* used elsewhere */ }
+}
+function clamp255(v){ return v < 0 ? 0 : v > 255 ? 255 : v; }
+
+function makeCanvas(size) {
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  return c;
+}
+
+function makeWallpaper() {
+  const s = 512, c = makeCanvas(s), ctx = c.getContext('2d');
+  ctx.fillStyle = '#b9a63f'; ctx.fillRect(0, 0, s, s);
+  // subtle vertical damask stripes
+  for (let x = 0; x < s; x += 16) {
+    ctx.fillStyle = (x / 16) % 2 ? 'rgba(150,132,40,0.35)' : 'rgba(200,182,80,0.25)';
+    ctx.fillRect(x, 0, 8, s);
+  }
+  // faint repeating motif
+  ctx.strokeStyle = 'rgba(120,104,30,0.30)'; ctx.lineWidth = 2;
+  for (let y = 24; y < s; y += 64) {
+    for (let x = 24; x < s; x += 64) {
+      ctx.beginPath(); ctx.arc(x, y, 10, 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+  // grime / water stains
+  for (let i = 0; i < 40; i++) {
+    const x = Math.random()*s, y = Math.random()*s, r = 12 + Math.random()*60;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, 'rgba(60,48,16,0.16)'); g.addColorStop(1, 'rgba(60,48,16,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+  }
+  noiseOverlay(ctx, s, s, 26);
+  return canvasTex(c, 1, 1);
+}
+
+function makeCarpet() {
+  const s = 512, c = makeCanvas(s), ctx = c.getContext('2d');
+  ctx.fillStyle = '#7d6f27'; ctx.fillRect(0, 0, s, s);
+  // damp patches
+  for (let i = 0; i < 60; i++) {
+    const x = Math.random()*s, y = Math.random()*s, r = 20 + Math.random()*90;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, 'rgba(30,26,8,0.22)'); g.addColorStop(1, 'rgba(30,26,8,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI*2); ctx.fill();
+  }
+  noiseOverlay(ctx, s, s, 60);
+  return canvasTex(c, 1, 1);
+}
+
+function makeCeiling() {
+  const s = 512, c = makeCanvas(s), ctx = c.getContext('2d');
+  ctx.fillStyle = '#c9c4a6'; ctx.fillRect(0, 0, s, s);
+  // acoustic tile grid
+  ctx.strokeStyle = 'rgba(70,66,50,0.65)'; ctx.lineWidth = 6;
+  ctx.strokeRect(3, 3, s-6, s-6);
+  ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(s/2,0); ctx.lineTo(s/2,s); ctx.moveTo(0,s/2); ctx.lineTo(s,s/2); ctx.stroke();
+  for (let i = 0; i < 300; i++) {
+    ctx.fillStyle = 'rgba(60,56,40,0.10)';
+    ctx.fillRect(Math.random()*s, Math.random()*s, 2, 2);
+  }
+  noiseOverlay(ctx, s, s, 18);
+  return canvasTex(c, 1, 1);
+}
+
+let MAX_ANISO = 4;
+function canvasTex(canvas, rx, ry) {
+  const t = new THREE.CanvasTexture(canvas);
+  t.wrapS = t.wrapT = THREE.RepeatWrapping;
+  t.repeat.set(rx, ry);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = MAX_ANISO;
+  return t;
+}
+
+/* ============================================================
+   INFINITE MAZE  (deterministic — no stored grid, endless in every direction)
+============================================================ */
+const mod = (n, m) => ((n % m) + m) % m;
+
+// 32-bit hash of (x, y, salt) -> [0,1)
+function h01(x, y, salt) {
+  let h = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263) ^ Math.imul(salt | 0, 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  h ^= h >>> 16;
+  return (h >>> 0) / 4294967295;
+}
+
+// Is cell (x,y) a wall? Backrooms office grid: room dividers with random
+// doorways + scattered pillars. Fully procedural, so the maze is infinite.
+function isWallCell(x, y) {
+  if (x >= -2 && x <= 2 && y >= -2 && y <= 2) return false;   // open spawn plaza
+  if (h01(x, y, 7) < 0.010) return true;                      // pillars
+  const onV = mod(x, ROOM) === 0;
+  const onH = mod(y, ROOM) === 0;
+  if (onV && onH) return true;                                // posts at intersections
+  if (onV) return h01(x, y, 1) > 0.25;                        // vertical divider + doorways
+  if (onH) return h01(x, y, 2) > 0.25;                        // horizontal divider + doorways
+  return false;
+}
+
+// world <-> cell (cells centred on multiples of CELL, origin at 0,0)
+const cellCenter = i => i * CELL;
+const worldToCell = c => Math.floor(c / CELL + 0.5);
+const isWallWorld = (x, z) => isWallCell(worldToCell(x), worldToCell(z));
+
+function blocked(x, z, r) {
+  const a = worldToCell(x - r), b = worldToCell(x + r);
+  const c = worldToCell(z - r), d = worldToCell(z + r);
+  for (let ix = a; ix <= b; ix++)
+    for (let iy = c; iy <= d; iy++)
+      if (isWallCell(ix, iy)) return true;
+  return false;
+}
+function resolveMove(px, pz, dx, dz, r) {
+  if (!blocked(px + dx, pz, r)) px += dx;
+  if (!blocked(px, pz + dz, r)) pz += dz;
+  return [px, pz];
+}
+function lineOfSightClear(ax, az, bx, bz) {
+  const dx = bx - ax, dz = bz - az;
+  const dist = Math.hypot(dx, dz);
+  const steps = Math.ceil(dist / 0.5);
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    if (isWallWorld(ax + dx*t, az + dz*t)) return false;
+  }
+  return true;
+}
+// a random open cell in a world-distance band around (ox,oz)
+function randomOpenCell(ox, oz, minD, maxD) {
+  for (let t = 0; t < 500; t++) {
+    const ang = Math.random() * Math.PI * 2;
+    const d = minD + Math.random() * (maxD - minD);
+    const cx = worldToCell(ox + Math.cos(ang) * d);
+    const cy = worldToCell(oz + Math.sin(ang) * d);
+    if (!isWallCell(cx, cy)) return [cx, cy];
+  }
+  return [worldToCell(ox) + 3, worldToCell(oz)];
+}
+
+/* ============================================================
+   RENDERER / SCENE / CAMERA
+============================================================ */
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+app.appendChild(renderer.domElement);
+MAX_ANISO = renderer.capabilities.getMaxAnisotropy();
+
+const scene = new THREE.Scene();
+const FOG = new THREE.Color(0x12100a);
+scene.background = FOG;
+scene.fog = new THREE.FogExp2(FOG, 0.052);
+
+const camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 200);
+camera.position.set(0, EYE_H, 0);
+scene.add(camera);
+
+const controls = new PointerLockControls(camera, renderer.domElement);
+
+/* ---- lighting base ---- */
+scene.add(new THREE.HemisphereLight(0x2a2618, 0x0a0906, 0.35));
+const ambient = new THREE.AmbientLight(0x1a1710, 0.22);
+scene.add(ambient);
+
+/* ---- flashlight ---- */
+const flashlight = new THREE.SpotLight(0xfff2cf, 0, 34, 0.55, 0.45, 1.6);
+flashlight.position.set(0, 0, 0.1);
+flashlight.castShadow = true;
+flashlight.shadow.mapSize.set(1024, 1024);
+flashlight.shadow.camera.near = 0.2;
+flashlight.shadow.camera.far = 34;
+flashlight.shadow.bias = -0.0006;
+const flashTarget = new THREE.Object3D();
+flashTarget.position.set(0, 0, -1);
+camera.add(flashlight);
+camera.add(flashTarget);
+flashlight.target = flashTarget;
+let flashlightOn = true;
+
+/* ============================================================
+   WORLD GEOMETRY
+============================================================ */
+const wallpaperTex = makeWallpaper();
+const carpetTex = makeCarpet();
+const ceilingTex = makeCeiling();
+
+// floor + ceiling are large planes that follow the player in whole-cell steps,
+// so the (world-aligned) texture stays seamless while the world feels endless.
+const FLOOR_SIZE = (CR * 2 + 4) * CELL;
+const FLOOR_REP  = FLOOR_SIZE / CELL;         // integer, even -> seamless snapping
+carpetTex.repeat.set(FLOOR_REP, FLOOR_REP);
+ceilingTex.repeat.set(FLOOR_REP, FLOOR_REP);
+
+const floorMat = new THREE.MeshStandardMaterial({ map: carpetTex, roughness: 1.0, metalness: 0.0 });
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE), floorMat);
+floor.rotation.x = -Math.PI/2; floor.receiveShadow = true; floor.frustumCulled = false;
+scene.add(floor);
+
+const ceilMat = new THREE.MeshStandardMaterial({ map: ceilingTex, roughness: 0.95 });
+const ceiling = new THREE.Mesh(new THREE.PlaneGeometry(FLOOR_SIZE, FLOOR_SIZE), ceilMat);
+ceiling.rotation.x = Math.PI/2; ceiling.position.y = WALL_H; ceiling.receiveShadow = true; ceiling.frustumCulled = false;
+scene.add(ceiling);
+
+// walls: one InstancedMesh, re-filled with the wall cells near the player
+const wallGeo = new THREE.BoxGeometry(CELL, WALL_H, CELL);
+const wallMat = new THREE.MeshStandardMaterial({ map: wallpaperTex, roughness: 0.92 });
+const WALL_CAP = (CR * 2 + 1) * (CR * 2 + 1);
+const wallMesh = new THREE.InstancedMesh(wallGeo, wallMat, WALL_CAP);
+wallMesh.castShadow = true; wallMesh.receiveShadow = true;
+wallMesh.frustumCulled = false; wallMesh.count = 0;
+scene.add(wallMesh);
+
+// fluorescent fixtures: a recycled pool repositioned onto the visible lattice
+const fixtures = [];
+const fixtureGeo = new THREE.PlaneGeometry(CELL * 0.5, CELL * 0.9);
+const FIX_CAP = Math.ceil(((CR * 2) / 3 + 3) ** 2);
+for (let i = 0; i < FIX_CAP; i++) {
+  const mat = new THREE.MeshStandardMaterial({
+    color: 0x111111, emissive: 0xfff4d6, emissiveIntensity: 2.4,
+    roughness: 0.4, side: THREE.DoubleSide,
+  });
+  const panel = new THREE.Mesh(fixtureGeo, mat);
+  panel.rotation.x = Math.PI/2; panel.visible = false; panel.frustumCulled = false;
+  scene.add(panel);
+  fixtures.push({ mesh: panel, mat, x: 0, z: 0, active: false,
+    seed: Math.random()*10, phase: Math.random()*Math.PI*2, dip: 1, flick: 1 });
+}
+
+// dynamic light pool (only the nearest fixtures actually illuminate)
+const LIGHT_POOL = 8;
+const pool = [];
+for (let i = 0; i < LIGHT_POOL; i++) {
+  const l = new THREE.PointLight(0xfff2d0, 0, 15, 2.0);
+  scene.add(l);
+  pool.push(l);
+}
+
+/* ---- streaming: rebuild nearby walls / fixtures / floor when the player
+        crosses into a new cell (keeps the world infinite but cheap) ---- */
+const _m4 = new THREE.Matrix4();
+let streamCX = null, streamCY = null;
+function streamWalls(pcx, pcy) {
+  let i = 0;
+  for (let cy = pcy - CR; cy <= pcy + CR && i < WALL_CAP; cy++)
+    for (let cx = pcx - CR; cx <= pcx + CR && i < WALL_CAP; cx++)
+      if (isWallCell(cx, cy)) {
+        _m4.makeTranslation(cellCenter(cx), WALL_H/2, cellCenter(cy));
+        wallMesh.setMatrixAt(i++, _m4);
+      }
+  wallMesh.count = i;
+  wallMesh.instanceMatrix.needsUpdate = true;
+}
+function streamFixtures(pcx, pcy) {
+  let i = 0;
+  for (let cy = pcy - CR; cy <= pcy + CR; cy++) {
+    if (mod(cy, 3) !== 1) continue;
+    for (let cx = pcx - CR; cx <= pcx + CR; cx++) {
+      if (mod(cx, 3) !== 1 || isWallCell(cx, cy) || i >= fixtures.length) continue;
+      const f = fixtures[i++];
+      f.x = cellCenter(cx); f.z = cellCenter(cy); f.active = true;
+      f.mesh.position.set(f.x, WALL_H - 0.02, f.z);
+      f.mesh.visible = true;
+    }
+  }
+  for (let k = i; k < fixtures.length; k++) { fixtures[k].active = false; fixtures[k].mesh.visible = false; }
+}
+function streamWorld(force) {
+  const pcx = worldToCell(player.x), pcy = worldToCell(player.z);
+  if (!force && pcx === streamCX && pcy === streamCY) return;
+  streamCX = pcx; streamCY = pcy;
+  floor.position.set(cellCenter(pcx), 0, cellCenter(pcy));
+  ceiling.position.set(cellCenter(pcx), WALL_H, cellCenter(pcy));
+  streamWalls(pcx, pcy);
+  streamFixtures(pcx, pcy);
+}
+
+/* ============================================================
+   PICKUPS + EXIT
+============================================================ */
+const pickups = [];
+const exitObj = { x: 0, z: 0, active: false, mesh: null };
+function placeObjectives() {
+  // almond water bottles, scattered 30–95 m out into the endless maze
+  const bottleGeo = new THREE.CylinderGeometry(0.14, 0.16, 0.5, 12);
+  for (let i = 0; i < PICKUPS_NEEDED; i++) {
+    const [cx, cy] = randomOpenCell(0, 0, 30, 95);
+    const mat = new THREE.MeshStandardMaterial({
+      color: 0xdfeecb, emissive: 0x9fd8ff, emissiveIntensity: 1.6,
+      roughness: 0.2, transparent: true, opacity: 0.92,
+    });
+    const b = new THREE.Mesh(bottleGeo, mat);
+    b.position.set(cellCenter(cx), 0.45, cellCenter(cy));
+    b.castShadow = true;
+    const glow = new THREE.PointLight(0x9fd8ff, 3, 6, 2);
+    glow.position.copy(b.position); glow.position.y = 0.6;
+    scene.add(b); scene.add(glow);
+    pickups.push({ x: b.position.x, z: b.position.z, mesh: b, glow, collected: false });
+  }
+
+  // exit, further out still
+  const [ex, ey] = randomOpenCell(0, 0, 80, 150);
+  exitObj.x = cellCenter(ex); exitObj.z = cellCenter(ey);
+  const frame = new THREE.Group();
+  const doorMat = new THREE.MeshStandardMaterial({ color: 0x0a0a0a, roughness: 0.6 });
+  const jamb = new THREE.Mesh(new THREE.BoxGeometry(0.25, 2.6, 0.25), doorMat);
+  const l = jamb.clone(); l.position.set(-0.85, 1.3, 0);
+  const r = jamb.clone(); r.position.set(0.85, 1.3, 0);
+  const top = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.25, 0.25), doorMat);
+  top.position.set(0, 2.55, 0);
+  const signMat = new THREE.MeshStandardMaterial({ color: 0x001100, emissive: 0x00ff44, emissiveIntensity: 0.15 });
+  const sign = new THREE.Mesh(new THREE.BoxGeometry(1.4, 0.4, 0.08), signMat);
+  sign.position.set(0, 2.9, 0);
+  const void_ = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 2.5),
+    new THREE.MeshBasicMaterial({ color: 0x000000 }));
+  void_.position.set(0, 1.25, 0);
+  frame.add(l, r, top, sign, void_);
+  frame.position.set(exitObj.x, 0, exitObj.z);
+  scene.add(frame);
+  exitObj.mesh = frame; exitObj.sign = signMat; exitObj.light = new THREE.PointLight(0x00ff55, 0, 8, 2);
+  exitObj.light.position.set(exitObj.x, 2.6, exitObj.z);
+  scene.add(exitObj.light);
+}
+
+/* ============================================================
+   MONSTERS  (a roster of distinct horrors stalking the endless halls)
+============================================================ */
+const START_MONSTERS = 4;      // active from the start; more wake with time & fear
+
+function eyeMesh(color, intensity, r) {
+  return new THREE.Mesh(
+    new THREE.SphereGeometry(r || 0.04, 8, 8),
+    new THREE.MeshStandardMaterial({ color: 0x000000, emissive: color, emissiveIntensity: intensity }));
+}
+
+// ---- models (each returns a Group; feet at y≈0, faces its local +Z ----
+function buildWatcher() {               // tall black figure, red eyes
+  const g = new THREE.Group();
+  const skin = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.35, metalness: 0.1 });
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.28, 1.15, 4, 10), skin); torso.position.y = 1.4;
+  const head  = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), skin); head.position.y = 2.2;
+  const limb = new THREE.CapsuleGeometry(0.09, 1.05, 4, 8);
+  const aL = new THREE.Mesh(limb, skin); aL.position.set(-0.35, 1.4, 0);
+  const aR = new THREE.Mesh(limb, skin); aR.position.set( 0.35, 1.4, 0);
+  const lL = new THREE.Mesh(limb, skin); lL.position.set(-0.15, 0.55, 0);
+  const lR = new THREE.Mesh(limb, skin); lR.position.set( 0.15, 0.55, 0);
+  const eL = eyeMesh(0xff2a00, 5); eL.position.set(-0.08, 2.23, 0.19);
+  const eR = eyeMesh(0xff2a00, 5); eR.position.set( 0.08, 2.23, 0.19);
+  g.add(torso, head, aL, aR, lL, lR, eL, eR);
+  return g;
+}
+function buildWanderer() {               // very tall, gaunt, pale, long arms
+  const g = new THREE.Group();
+  const skin = new THREE.MeshStandardMaterial({ color: 0x6b6d63, roughness: 0.85 });
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.22, 1.6, 4, 10), skin); torso.position.y = 1.85;
+  const head  = new THREE.Mesh(new THREE.SphereGeometry(0.2, 16, 16), skin); head.position.y = 2.8;
+  const arm = new THREE.CapsuleGeometry(0.07, 1.5, 4, 8);
+  const aL = new THREE.Mesh(arm, skin); aL.position.set(-0.3, 1.65, 0);
+  const aR = new THREE.Mesh(arm, skin); aR.position.set( 0.3, 1.65, 0);
+  const leg = new THREE.CapsuleGeometry(0.08, 1.3, 4, 8);
+  const lL = new THREE.Mesh(leg, skin); lL.position.set(-0.13, 0.7, 0);
+  const lR = new THREE.Mesh(leg, skin); lR.position.set( 0.13, 0.7, 0);
+  const eL = eyeMesh(0x8fff6a, 3, 0.05); eL.position.set(-0.07, 2.83, 0.17);
+  const eR = eyeMesh(0x8fff6a, 3, 0.05); eR.position.set( 0.07, 2.83, 0.17);
+  g.add(torso, head, aL, aR, lL, lR, eL, eR);
+  return g;
+}
+function buildCrawler() {                // low, wide, scuttling, many white eyes
+  const g = new THREE.Group();
+  const skin = new THREE.MeshStandardMaterial({ color: 0x2a1414, roughness: 0.6 });
+  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.32, 0.9, 4, 10), skin);
+  body.rotation.x = Math.PI/2; body.position.set(0, 0.5, 0);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(0.27, 16, 16), skin); head.position.set(0, 0.5, 0.7);
+  const leg = new THREE.CapsuleGeometry(0.05, 0.7, 4, 6);
+  for (let i = 0; i < 3; i++) {
+    const s = -0.35 + i * 0.35;
+    const l1 = new THREE.Mesh(leg, skin); l1.position.set(0.4, 0.35, s); l1.rotation.z = -0.9; g.add(l1);
+    const l2 = new THREE.Mesh(leg, skin); l2.position.set(-0.4, 0.35, s); l2.rotation.z = 0.9; g.add(l2);
+  }
+  g.add(body, head);
+  for (let i = 0; i < 6; i++) {
+    const e = eyeMesh(0xffffff, 4, 0.03);
+    e.position.set(-0.12 + (i % 3) * 0.12, 0.44 + (i > 2 ? 0.14 : 0), 0.74);
+    g.add(e);
+  }
+  return g;
+}
+function buildSmiler() {                 // near-invisible body, glowing grin + eyes
+  const g = new THREE.Group();
+  const skin = new THREE.MeshStandardMaterial({ color: 0x020202, roughness: 0.9 });
+  const torso = new THREE.Mesh(new THREE.CapsuleGeometry(0.3, 1.3, 4, 10), skin); torso.position.y = 1.55;
+  const head  = new THREE.Mesh(new THREE.SphereGeometry(0.27, 16, 16), skin); head.position.y = 2.45;
+  const eL = eyeMesh(0xffffff, 6, 0.055); eL.position.set(-0.1, 2.52, 0.22);
+  const eR = eyeMesh(0xffffff, 6, 0.055); eR.position.set( 0.1, 2.52, 0.22);
+  const grinMat = new THREE.MeshStandardMaterial({ color: 0x000000, emissive: 0xffffff, emissiveIntensity: 5 });
+  g.add(torso, head, eL, eR);
+  for (let i = 0; i < 7; i++) {
+    const tooth = new THREE.Mesh(new THREE.BoxGeometry(0.045, 0.09, 0.02), grinMat);
+    const a = (i / 6 - 0.5) * 0.9;
+    tooth.position.set(Math.sin(a) * 0.2, 2.34 - Math.abs(a) * 0.06, 0.25);
+    g.add(tooth);
+  }
+  return g;
+}
+
+const MONSTER_DEFS = {
+  // freeze: stops while you look at it. charge: sprints when it has line of sight.
+  // relentless: always advances. hunt = base speed, chase = sight speed.
+  watcher:  { build: buildWatcher,  hunt: 3.9, chase: 0,   catch: 1.7, freeze: true },
+  smiler:   { build: buildSmiler,   hunt: 4.7, chase: 0,   catch: 1.6, freeze: true },
+  crawler:  { build: buildCrawler,  hunt: 2.6, chase: 5.7, catch: 1.5, charge: true },
+  wanderer: { build: buildWanderer, hunt: 2.7, chase: 2.7, catch: 1.7, relentless: true },
+};
+const MONSTER_ROSTER = ['watcher','crawler','wanderer','smiler','crawler','watcher',
+                        'wanderer','smiler','crawler','watcher','wanderer','crawler'];
+const MAX_MONSTERS = MONSTER_ROSTER.length;   // up to 12 stalking at once
+
+const monsters = [];
+let activeCount = 0, monsterRampT = 0, killer = null;
+const _seeFwd = new THREE.Vector3();
+
+function buildMonsters() {
+  for (const type of MONSTER_ROSTER) {
+    const def = MONSTER_DEFS[type];
+    const mesh = def.build();
+    mesh.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    mesh.visible = false;
+    scene.add(mesh);
+    monsters.push({ type, def, mesh, x: 0, z: 0, active: false, sway: Math.random() * 10 });
+  }
+}
+function spawnMonster(m, minD, maxD) {
+  const [cx, cy] = randomOpenCell(player.x, player.z, minD, maxD);
+  m.x = cellCenter(cx); m.z = cellCenter(cy);
+}
+// does the PLAYER see this monster? (view cone + line of sight)
+function playerSees(m) {
+  const dx = m.x - camera.position.x, dz = m.z - camera.position.z;
+  const dist = Math.hypot(dx, dz);
+  if (dist < 0.6) return true;
+  camera.getWorldDirection(_seeFwd);
+  if ((_seeFwd.x * dx + _seeFwd.z * dz) / dist < 0.5) return false;   // outside ~60° cone
+  return lineOfSightClear(camera.position.x, camera.position.z, m.x, m.z);
+}
+function nearestActiveMonster() {
+  let best = null, bd = Infinity;
+  for (const m of monsters) {
+    if (!m.active) continue;
+    const d = Math.hypot(m.x - player.x, m.z - player.z);
+    if (d < bd) { bd = d; best = m; }
+  }
+  return { m: best, dist: bd };
+}
+
+/* ============================================================
+   POST-PROCESSING
+============================================================ */
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloom = new UnrealBloomPass(new THREE.Vector2(innerWidth, innerHeight), 0.75, 0.5, 0.82);
+composer.addPass(bloom);
+
+const FXShader = {
+  uniforms: {
+    tDiffuse:  { value: null },
+    time:      { value: 0 },
+    aberration:{ value: 0.0016 },
+    vignette:  { value: 0.8 },
+    grain:     { value: 0.05 },
+    distortion:{ value: 0.0 },
+  },
+  vertexShader: `
+    varying vec2 vUv;
+    void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }
+  `,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float time, aberration, vignette, grain, distortion;
+    varying vec2 vUv;
+    float rand(vec2 co){ return fract(sin(dot(co, vec2(12.9898,78.233))) * 43758.5453); }
+    void main(){
+      vec2 uv = vUv;
+      vec2 center = uv - 0.5;
+      float d = length(center);
+      // sanity warp
+      uv += center * d * distortion * 0.18;
+      uv.y += sin(uv.x * 12.0 + time * 2.0) * distortion * 0.006;
+      // chromatic aberration
+      vec2 off = center * (aberration + distortion * 0.01) * (0.5 + d);
+      float r = texture2D(tDiffuse, uv + off).r;
+      float g = texture2D(tDiffuse, uv).g;
+      float b = texture2D(tDiffuse, uv - off).b;
+      vec3 col = vec3(r, g, b);
+      // vignette
+      float vig = smoothstep(0.95, 0.28, d);
+      col *= mix(1.0, vig, vignette);
+      // scanlines
+      col *= 1.0 - 0.05 * sin(uv.y * 900.0);
+      // film grain
+      float n = rand(uv * (time * 0.6 + 1.3)) - 0.5;
+      col += n * grain;
+      gl_FragColor = vec4(col, 1.0);
+    }
+  `,
+};
+const fxPass = new ShaderPass(FXShader);
+composer.addPass(fxPass);
+composer.addPass(new OutputPass());
+
+/* ============================================================
+   AUDIO  (Web Audio API — fully synthesised)
+============================================================ */
+const Audio = (() => {
+  let ctx, master, hum, drone, droneLFO, noiseBuf, started = false;
+  function initBuffers() {
+    noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+    const d = noiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  function start() {
+    if (started) return;
+    ctx = new (window.AudioContext || window.webkitAudioContext)();
+    master = ctx.createGain(); master.gain.value = 0.6; master.connect(ctx.destination);
+    initBuffers();
+
+    // fluorescent hum (mains buzz)
+    hum = ctx.createGain(); hum.gain.value = 0.05; hum.connect(master);
+    [120, 240, 60].forEach((f, i) => {
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
+      const g = ctx.createGain(); g.gain.value = [0.5, 0.25, 0.4][i];
+      const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
+      o.connect(g); g.connect(lp); lp.connect(hum); o.start();
+    });
+
+    // low dread drone
+    drone = ctx.createGain(); drone.gain.value = 0.0; drone.connect(master);
+    [55, 55.4, 82.5].forEach(f => {
+      const o = ctx.createOscillator(); o.type = 'triangle'; o.frequency.value = f;
+      o.connect(drone); o.start();
+    });
+    droneLFO = ctx.createOscillator(); droneLFO.frequency.value = 0.08;
+    const lfoGain = ctx.createGain(); lfoGain.gain.value = 0.02;
+    droneLFO.connect(lfoGain); lfoGain.connect(drone.gain); droneLFO.start();
+
+    started = true;
+  }
+  function resume(){ if (ctx && ctx.state === 'suspended') ctx.resume(); }
+  function suspend(){ if (ctx) ctx.suspend(); }
+
+  function footstep() {
+    if (!started) return;
+    const src = ctx.createBufferSource(); src.buffer = noiseBuf;
+    const g = ctx.createGain(); const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 380 + Math.random()*120;
+    g.gain.setValueAtTime(0.0, ctx.currentTime);
+    g.gain.linearRampToValueAtTime(0.22, ctx.currentTime + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.18);
+    src.connect(lp); lp.connect(g); g.connect(master);
+    src.start(); src.stop(ctx.currentTime + 0.2);
+  }
+  function heartbeat(intensity) {
+    if (!started) return;
+    const t = ctx.currentTime;
+    const thump = (at, vol) => {
+      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 52;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, at);
+      g.gain.linearRampToValueAtTime(vol, at + 0.03);
+      g.gain.exponentialRampToValueAtTime(0.001, at + 0.22);
+      o.connect(g); g.connect(master); o.start(at); o.stop(at + 0.24);
+    };
+    thump(t, 0.25 * intensity); thump(t + 0.16, 0.18 * intensity);
+  }
+  function zap() {
+    if (!started) return;
+    const src = ctx.createBufferSource(); src.buffer = noiseBuf;
+    const g = ctx.createGain(); const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass'; bp.frequency.value = 1800; bp.Q.value = 3;
+    g.gain.setValueAtTime(0.12, ctx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.09);
+    src.connect(bp); bp.connect(g); g.connect(master); src.start(); src.stop(ctx.currentTime + 0.1);
+  }
+  function pickup() {
+    if (!started) return;
+    const t = ctx.currentTime;
+    [660, 880, 1320].forEach((f, i) => {
+      const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = f;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0, t + i*0.08);
+      g.gain.linearRampToValueAtTime(0.15, t + i*0.08 + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t + i*0.08 + 0.3);
+      o.connect(g); g.connect(master); o.start(t + i*0.08); o.stop(t + i*0.08 + 0.32);
+    });
+  }
+  function scream() {
+    if (!started) return;
+    const t = ctx.currentTime;
+    // dissonant screech
+    [520, 553, 611, 780].forEach(f => {
+      const o = ctx.createOscillator(); o.type = 'sawtooth'; o.frequency.value = f;
+      const g = ctx.createGain();
+      g.gain.setValueAtTime(0.0, t);
+      g.gain.linearRampToValueAtTime(0.3, t + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.001, t + 1.2);
+      o.frequency.exponentialRampToValueAtTime(f * 0.5, t + 1.2);
+      o.connect(g); g.connect(master); o.start(t); o.stop(t + 1.25);
+    });
+    // low boom
+    const src = ctx.createBufferSource(); src.buffer = noiseBuf;
+    const g = ctx.createGain(); const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 200;
+    g.gain.setValueAtTime(0.5, t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.8);
+    src.connect(lp); lp.connect(g); g.connect(master); src.start(); src.stop(t + 0.85);
+  }
+  function setTension(x) {
+    if (!started) return;
+    drone.gain.setTargetAtTime(0.02 + x * 0.14, ctx.currentTime, 0.4);
+    hum.gain.setTargetAtTime(0.05 + x * 0.02, ctx.currentTime, 0.4);
+  }
+  return { start, resume, suspend, footstep, heartbeat, zap, pickup, scream, setTension,
+    get on(){ return started; } };
+})();
+
+/* ============================================================
+   PLAYER STATE
+============================================================ */
+const player = { x: 0, z: 0, vx: 0, vz: 0 };
+const input = { f: false, b: false, l: false, r: false, sprint: false };
+let sanity = 100, stamina = 100;
+let bobPhase = 0, lastBobSin = 0;
+let heartTimer = 0;
+
+let state = 'menu';          // menu | playing | paused | dying | dead | won
+let collected = 0;
+let elapsed = 0, dyingTimer = 0;
+let fearLevel = 0;           // 0..100, from the Mind Link (or simulated)
+
+const MONSTER_NAME = { watcher:'The Watcher', smiler:'The Smiler', crawler:'The Crawler', wanderer:'The Wanderer' };
+
+/* ============================================================
+   MIND LINK  (fear biofeedback + live EEG graph)
+   Fed by our engine (EngineBridge → feedEngine) when a real NeuroSky MindLink is
+   read server-side by the engine's serial adapter. No device? It runs in SIM
+   mode, deriving "brainwaves" from in-game danger.
+============================================================ */
+const MindLink = (() => {
+  const N = 170;
+  const fearHist = new Float32Array(N), attHist = new Float32Array(N), rawHist = new Float32Array(N);
+  let head = 0, live = false, ws = null, tries = 0;
+  let attention = 50, meditation = 60, signal = 200, fear = 0;
+  let lastData = 0, source = '';       // 'bt' | 'ws'
+  const scaredOf = { watcher: 0, smiler: 0, crawler: 0, wanderer: 0 };
+  let topFear = null, canvas, cx;
+
+  function init() {
+    canvas = document.getElementById('mlGraph');
+    if (canvas) cx = canvas.getContext('2d');
+    // A real headset is read by our engine (EngineBridge), not this legacy local
+    // WebSocket bridge — so we don't open it. SIM until the engine feeds affect.
+  }
+  function status() {
+    const el = document.getElementById('mlStatus');
+    if (!el) return;
+    const label = source === 'engine' ? 'ENGINE' : (live ? 'LIVE' : 'SIM');
+    el.textContent = label;
+    el.className = (live || source === 'engine') ? 'live' : 'sim';
+  }
+  // Drive attention/meditation from OUR engine's affect model (calibration + CV
+  // fusion + safety back-off flow through it). Takes priority unless a real
+  // headset (bt/ws) is streaming.
+  function feedEngine(att, med) {
+    if (source === 'bt' || source === 'ws') return;   // real hardware wins
+    attention = att; meditation = med;
+    live = true; source = 'engine'; lastData = performance.now(); status();
+  }
+  function update(dt, ctx) {
+    if (live && performance.now() - lastData > 3000) { live = false; source = ''; status(); }  // signal lost
+    if (!live) {                                   // simulate EEG from in-game danger
+      const now = performance.now();
+      const tAtt = 34 + ctx.danger * 58 + Math.sin(now * 0.0031) * 6;
+      const tMed = 86 - ctx.danger * 72 + Math.cos(now * 0.0022) * 6;
+      attention  += (tAtt - attention) * Math.min(1, dt * 2.2);
+      meditation += (tMed - meditation) * Math.min(1, dt * 2.2);
+      signal = 0;
+    }
+    const stress = 100 - meditation;
+    const raw = Math.max(0, Math.min(100, 0.68 * stress + 0.32 * attention));
+    fear += (raw - fear) * Math.min(1, dt * 3);
+
+    if (fear > 45 && ctx.blameType) scaredOf[ctx.blameType] += fear * dt;
+    let best = null;
+    for (const k in scaredOf) if (!best || scaredOf[k] > scaredOf[best]) best = k;
+    topFear = (best && scaredOf[best] > 1.5) ? best : null;
+
+    head = (head + 1) % N;
+    fearHist[head] = fear; attHist[head] = attention;
+    const now = performance.now();
+    rawHist[head] = (Math.sin(now * 0.02) + Math.sin(now * 0.051) * 0.6 + (Math.random() - 0.5) * 0.4)
+                    * (0.25 + fear / 100 * 0.9);
+    return fear;
+  }
+  function draw() {
+    if (!cx) return;
+    const w = canvas.width, h = canvas.height;
+    cx.clearRect(0, 0, w, h);
+    cx.strokeStyle = 'rgba(216,195,74,0.10)'; cx.lineWidth = 1;
+    for (let i = 0; i <= 4; i++) { const y = i / 4 * h; cx.beginPath(); cx.moveTo(0, y); cx.lineTo(w, y); cx.stroke(); }
+    // faux EEG trace
+    cx.strokeStyle = 'rgba(150,215,255,0.55)'; cx.lineWidth = 1; cx.beginPath();
+    for (let i = 0; i < N; i++) { const idx = (head + 1 + i) % N; const x = i / (N - 1) * w; const y = h * 0.28 + rawHist[idx] * h * 0.22; i ? cx.lineTo(x, y) : cx.moveTo(x, y); }
+    cx.stroke();
+    const plot = (arr, color) => {
+      cx.strokeStyle = color; cx.lineWidth = 1.6; cx.beginPath();
+      for (let i = 0; i < N; i++) { const idx = (head + 1 + i) % N; const x = i / (N - 1) * w; const y = h - (arr[idx] / 100) * h; i ? cx.lineTo(x, y) : cx.moveTo(x, y); }
+      cx.stroke();
+    };
+    plot(attHist, 'rgba(120,200,255,0.75)');
+    plot(fearHist, 'rgba(255,70,70,0.95)');
+  }
+  return { init, update, draw,
+    resetBlame() { for (const k in scaredOf) scaredOf[k] = 0; fear = 0; },
+    get fear() { return fear; }, get live() { return live; }, get source() { return source; },
+    get attention() { return attention; }, get meditation() { return meditation; },
+    get topFear() { return topFear; } };
+})();
+
+/* ============================================================
+   ASSET LOADER — pulls the engine's fetched open-library assets (Poly Haven
+   CC0) into the world: a real diffuse texture onto the walls, and a
+   downloadable glTF prop into the maze. Every step is best-effort — any
+   fetch / CORS / decode failure silently keeps the procedural art, so the
+   game never breaks when the engine or network is absent.
+============================================================ */
+const AssetLoader = (() => {
+  const texLoader = new THREE.TextureLoader();
+  texLoader.setCrossOrigin('anonymous');
+  let appliedTexId = null, modelObj = null, loadedModelId = null;
+
+  // Only genuine direct-media URLs — not catalog pages (Kenney/OpenGameArt
+  // pack URIs are human-facing links, and a viewer page isn't a loadable file).
+  const MEDIA_EXT = { image: /\.(jpe?g|png|webp)(\?|#|$)/i, model: /\.(gltf|glb)(\?|#|$)/i };
+  const loadable = (a, kind) =>
+    a && a.kind === kind && typeof a.uri === 'string'
+    && /^https?:\/\//.test(a.uri) && MEDIA_EXT[kind].test(a.uri);
+
+  // first asset of a kind that points at a loadable media file
+  function firstAsset(assets, kind) {
+    for (const list of Object.values(assets || {}))
+      for (const a of (list || []))
+        if (loadable(a, kind)) return a;
+    return null;
+  }
+
+  function applyTexture(asset) {
+    if (!asset || asset.id === appliedTexId) return;
+    texLoader.load(asset.uri, tex => {
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = MAX_ANISO;
+      tex.repeat.set(1, 1);
+      const old = wallMat.map;
+      wallMat.map = tex; wallMat.needsUpdate = true;
+      if (old && old !== wallpaperTex) old.dispose();   // free the previous fetched tex
+      appliedTexId = asset.id;
+      console.info('[assets] wall texture ←', asset.name, asset.attribution || '');
+    }, undefined, () => {});   // on error: keep the procedural wallpaper
+  }
+
+  function disposeModel() {
+    if (!modelObj) return;
+    scene.remove(modelObj);
+    modelObj.traverse(o => { if (o.isMesh) { o.geometry.dispose();
+      (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m && m.dispose()); } });
+    modelObj = null;
+  }
+
+  function loadModel(asset) {
+    if (!asset || asset.id === loadedModelId) return;
+    loadedModelId = asset.id;                       // never retry the same id
+    const includes = (asset.params && asset.params.includes) || {};
+    const mgr = new THREE.LoadingManager();
+    // Poly Haven glTF is multi-file (.gltf + .bin + textures); rewrite each
+    // relative include to the absolute URL the engine already resolved.
+    mgr.setURLModifier(url => {
+      for (const rel of Object.keys(includes)) if (url.endsWith(rel)) return includes[rel];
+      return url;
+    });
+    const loader = new GLTFLoader(mgr);
+    loader.setCrossOrigin('anonymous');
+    loader.load(asset.uri, g => {
+      const obj = g.scene || (g.scenes && g.scenes[0]);
+      if (!obj) return;
+      disposeModel();                               // replace any prior prop
+      // normalise to ~2 m tall and stand it on the floor a short walk away
+      const size = new THREE.Vector3(); new THREE.Box3().setFromObject(obj).getSize(size);
+      obj.scale.setScalar(Math.min(4, Math.max(0.5, 2 / (size.y || 1))));
+      const box = new THREE.Box3().setFromObject(obj);
+      const [cx, cy] = randomOpenCell(0, 0, 8, 22);
+      obj.position.set(cellCenter(cx), -box.min.y, cellCenter(cy));
+      obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      scene.add(obj); modelObj = obj;
+      console.info('[assets] prop model ←', asset.name, asset.attribution || '');
+    }, undefined, () => {});   // on error: keep the procedural props
+  }
+
+  function apply(script) {
+    const assets = script && script.assets;
+    if (!assets) return;
+    try { applyTexture(firstAsset(assets, 'image')); } catch (e) {}
+    try { loadModel(firstAsset(assets, 'model')); } catch (e) {}
+  }
+  return { apply };
+})();
+
+/* ============================================================
+   ENGINE BRIDGE  — connects the game to our Python "brain":
+   the Architect composes the Script (Claude/mock), escalation ramps the
+   monsters, reactions train the learning/evolution layer, and — crucially —
+   our MindLink adapter (engine/eeg/sources.py) is what reads a real headset
+   (server-side, over the COM port), driving the game's fear through OUR affect
+   model. No browser Bluetooth. Falls back gracefully when the engine is absent.
+============================================================ */
+const EngineBridge = (() => {
+  let base = null, sid = null, playerId = null, connected = false;
+  let escalation = 0, script = null, pollTimer = 0, lastReaction = 0, learnedTop = null;
+  let sourceKind = null;
+  // map the game's monsters onto our DataPoint catalog so learning generalises
+  const MONSTER_DP = {
+    watcher:  'encounter.distant_figure',
+    crawler:  'encounter.crawler',
+    wanderer: 'encounter.render',
+    smiler:   'encounter.reflection_wrong',
+  };
+  const pid = () => { try { let id = localStorage.getItem('eeg_player_id');
+    if (!id) { id = 'p_' + Math.random().toString(36).slice(2, 10); localStorage.setItem('eeg_player_id', id); }
+    return id; } catch (e) { return 'anon'; } };
+  const jr = async r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); };
+
+  async function connect(url) {
+    base = (url || location.origin).replace(/\/$/, '');
+    if (!base.startsWith('http')) return false;   // opened as a file:// — no engine
+    playerId = pid();
+    try {
+      const seed = { theme: 'the backrooms', fears: ['being chased', 'isolation', 'darkness', 'being watched'] };
+      let r = await fetch(base + '/v1/sessions', { method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ seed, player_id: playerId }) });
+      sid = (await jr(r)).id; if (!sid) throw new Error('no session id');
+      await fetch(base + '/v1/sessions/' + sid + '/generate', { method: 'POST' });
+      await compose();
+      connected = true; return true;
+    } catch (e) { connected = false; return false; }
+  }
+  async function compose() {
+    const r = await fetch(base + '/v1/sessions/' + sid + '/script', { method: 'POST',
+      headers: { 'content-type': 'application/json' }, body: JSON.stringify({ length: 8 }) });
+    script = await jr(r); escalation = script.escalation || 0;
+    AssetLoader.apply(script);   // pull fetched CC0 textures/models into the world
+  }
+  async function newRun() { if (connected) { try { await compose(); } catch (e) {} } }
+
+  // Ask the engine to read a real MindLink headset with OUR adapter (server-side).
+  async function useMindLink(port) {
+    if (!connected) { if (!await connect(location.origin)) return false; }
+    try {
+      const r = await fetch(base + '/v1/sessions/' + sid + '/eeg/source', { method: 'POST',
+        headers: { 'content-type': 'application/json' }, body: JSON.stringify({ kind: 'mindlink', port: port || 'COM7' }) });
+      if (r.ok) { sourceKind = 'mindlink'; return true; }
+    } catch (e) {}
+    return false;
+  }
+
+  let polling = false;
+  async function poll() {
+    if (!connected || polling) return;   // no overlapping polls
+    polling = true;
+    try {
+      const r = await fetch(base + '/v1/sessions/' + sid, { signal: AbortSignal.timeout(2000) });
+      if (!r.ok) return;
+      const s = await r.json();
+      // Only drive fear from the engine when an engine source is actually feeding
+      // it (a real MindLink). Otherwise the game's own danger-sim runs the fear.
+      if (s.eeg_source && s.last_affect) {
+        const a = s.last_affect;
+        MindLink.feedEngine(Math.round((a.arousal || 0) * 100), Math.round((a.relaxation || 0) * 100));
+      }
+    } catch (e) {} finally { polling = false; }
+  }
+
+  function tick(dt, ctx) {
+    if (!connected) return;
+    pollTimer -= dt;
+    if (pollTimer <= 0) { pollTimer = 0.3; poll(); }
+    const now = performance.now();
+    if (ctx.blameType && ctx.danger > 0.5 && now - lastReaction > 5000) {
+      lastReaction = now;
+      const dp = MONSTER_DP[ctx.blameType];
+      if (dp) fetch(base + '/v1/sessions/' + sid + '/reactions', { method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ datapoint_ids: [dp], reward: Math.min(1, ctx.danger) }) })
+        .then(r => r.ok ? r.json() : null)
+        .then(s => { if (s && s.top_datapoints && s.top_datapoints.length) learnedTop = s.top_datapoints[0][0]; })
+        .catch(() => {});
+    }
+  }
+
+  return { connect, newRun, useMindLink, tick,
+    get connected() { return connected; }, get escalation() { return escalation; },
+    get sourceKind() { return sourceKind; }, get learnedTop() { return learnedTop; } };
+})();
+
+function updateMindLinkPanel() {
+  el('mlFear').style.width = MindLink.fear.toFixed(0) + '%';
+  el('mlAtt').style.width  = MindLink.attention.toFixed(0) + '%';
+  el('mlMed').style.width  = MindLink.meditation.toFixed(0) + '%';
+  const t = MindLink.topFear;
+  el('mlScared').innerHTML = t ? `SCARED OF: <b>${MONSTER_NAME[t]}</b>`
+    : (MindLink.fear > 25 ? 'SOMETHING IS NEAR…' : '');
+}
+
+/* ============================================================
+   INPUT
+============================================================ */
+addEventListener('keydown', e => {
+  switch (e.code) {
+    case 'KeyW': case 'ArrowUp': input.f = true; break;
+    case 'KeyS': case 'ArrowDown': input.b = true; break;
+    case 'KeyA': case 'ArrowLeft': input.r = true; break;
+    case 'KeyD': case 'ArrowRight': input.l = true; break;
+    case 'ShiftLeft': case 'ShiftRight': input.sprint = true; break;
+    case 'KeyF':
+      flashlightOn = !flashlightOn; if (Audio.on) Audio.zap(); break;
+  }
+});
+addEventListener('keyup', e => {
+  switch (e.code) {
+    case 'KeyW': case 'ArrowUp': input.f = false; break;
+    case 'KeyS': case 'ArrowDown': input.b = false; break;
+    case 'KeyA': case 'ArrowLeft': input.r = false; break;
+    case 'KeyD': case 'ArrowRight': input.l = false; break;
+    case 'ShiftLeft': case 'ShiftRight': input.sprint = false; break;
+  }
+});
+
+controls.addEventListener('unlock', () => {
+  if (state === 'playing') { state = 'paused'; show('pause'); Audio.suspend(); }
+});
+controls.addEventListener('lock', () => {
+  if (state === 'paused' || state === 'menu') { state = 'playing'; hideMenus(); Audio.resume(); }
+});
+
+/* ============================================================
+   UI HELPERS
+============================================================ */
+const el = id => document.getElementById(id);
+const overlays = ['menu', 'pause', 'dead', 'won'];
+function hideMenus(){ overlays.forEach(o => el(o).classList.add('hidden')); el('hud').classList.remove('hidden'); el('mindlink').classList.remove('hidden'); }
+function show(id){ el(id).classList.remove('hidden'); }
+let msgTimer = 0;
+function message(txt, dur = 3) { el('message').textContent = txt; el('message').style.opacity = '1'; msgTimer = dur; }
+
+function beginGame() {
+  // re-randomise objectives, monsters & player each run (endless maze)
+  resetObjectives();
+  player.x = 0; player.z = 0; player.vx = player.vz = 0;
+  camera.position.set(0, EYE_H, 0);
+  camera.fov = 72; camera.updateProjectionMatrix();
+  bobPhase = 0; lastBobSin = 0;
+  sanity = 100; stamina = 100; collected = 0; elapsed = 0;
+  // reset the monster roster
+  activeCount = 0; monsterRampT = 0; killer = null; fearLevel = 0;
+  for (const m of monsters) { m.active = false; m.mesh.visible = false; m.mesh.scale.setScalar(1); }
+  MindLink.resetBlame();
+  EngineBridge.newRun();          // Architect re-authors the run (escalation ↑, fresh assets)
+  streamWorld(true);
+  updateObjective();
+  Audio.start(); Audio.resume();
+  state = 'playing'; hideMenus();
+  controls.lock();
+}
+
+function updateObjective() {
+  if (collected < PICKUPS_NEEDED)
+    el('objective').innerHTML = `Find Almond Water — <b>${collected} / ${PICKUPS_NEEDED}</b>`;
+  else
+    el('objective').innerHTML = `<b>EXIT UNLOCKED</b> — escape the Backrooms`;
+}
+
+// re-randomise the collectibles + exit (maze layout stays fixed across runs)
+function resetObjectives() {
+  // Dispose GPU resources — scene.remove() only detaches; buffers/programs would
+  // otherwise leak VRAM on every retry.
+  pickups.forEach(p => {
+    scene.remove(p.mesh); scene.remove(p.glow);
+    p.mesh.geometry.dispose(); p.mesh.material.dispose();
+  });
+  pickups.length = 0;
+  if (exitObj.mesh) {
+    scene.remove(exitObj.mesh); scene.remove(exitObj.light);
+    exitObj.mesh.traverse(o => { if (o.isMesh) { o.geometry.dispose(); o.material.dispose(); } });
+    exitObj.mesh = null;
+  }
+  exitObj.active = false;
+  placeObjectives();
+}
+
+/* ============================================================
+   MENU BUTTONS
+============================================================ */
+el('startBtn').addEventListener('click', beginGame);
+el('resumeBtn').addEventListener('click', () => controls.lock());
+el('retryBtn').addEventListener('click', beginGame);
+el('playAgainBtn').addEventListener('click', beginGame);
+// connect a real MindLink headset — read by OUR engine adapter (server-side over
+// the serial/COM port), not browser Bluetooth. The engine's affect model then
+// drives the game's fear.
+async function doConnectMindLink(btn) {
+  const orig = btn.textContent;
+  const port = (prompt('MindLink serial/COM port (e.g. COM7 on Windows, /dev/rfcomm0 on Linux):', 'COM7') || '').trim();
+  if (!port) return;
+  btn.textContent = '🧠 Connecting…';
+  const ok = await EngineBridge.useMindLink(port);
+  btn.textContent = ok ? '🧠 MindLink via engine ✓' : '🧠 Engine not reachable — start it first';
+  if (!ok) setTimeout(() => { btn.textContent = orig; }, 4000);
+}
+el('mlConnectBtn').addEventListener('click', e => doConnectMindLink(e.currentTarget));
+el('mlConnectBtn2').addEventListener('click', e => doConnectMindLink(e.currentTarget));
+
+/* ============================================================
+   DEATH / WIN
+============================================================ */
+function die(m) {
+  if (state !== 'playing') return;
+  killer = m || nearestActiveMonster().m || monsters[0];
+  state = 'dying'; dyingTimer = 1.1;
+  Audio.scream();
+  // slam the killer into view
+  const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd);
+  killer.x = camera.position.x + fwd.x * 1.0;
+  killer.z = camera.position.z + fwd.z * 1.0;
+  killer.mesh.visible = true;
+  killer.mesh.scale.setScalar(1.4);          // loom into the player's face
+  flashScreen(0.9, '#5a0000');
+  controls.unlock();
+}
+function win() {
+  state = 'won'; show('won'); controls.unlock(); Audio.suspend();
+}
+function flashScreen(peak, color) {
+  const f = el('flash'); f.style.background = color || '#fff';
+  f.style.transition = 'none'; f.style.opacity = String(peak);
+  requestAnimationFrame(() => { f.style.transition = 'opacity .7s'; f.style.opacity = '0'; });
+}
+
+/* ============================================================
+   MAIN LOOP
+============================================================ */
+const clock = new THREE.Clock();
+const tmpFwd = new THREE.Vector3();
+
+function updatePlaying(dt) {
+  elapsed += dt;
+
+  // --- movement direction from yaw ---
+  camera.getWorldDirection(tmpFwd);
+  const fx = tmpFwd.x, fz = tmpFwd.z;
+  const flen = Math.hypot(fx, fz) || 1;
+  const fX = fx/flen, fZ = fz/flen;      // forward on ground
+  const rX = fZ, rZ = -fX;               // right on ground
+
+  let ix = 0, iz = 0;
+  if (input.f) { ix += fX; iz += fZ; }
+  if (input.b) { ix -= fX; iz -= fZ; }
+  if (input.r) { ix += rX; iz += rZ; }
+  if (input.l) { ix -= rX; iz -= rZ; }
+  const ilen = Math.hypot(ix, iz);
+  if (ilen > 0) { ix /= ilen; iz /= ilen; }
+
+  const moving = ilen > 0;
+  const wantSprint = input.sprint && stamina > 1 && moving;
+  const speed = wantSprint ? SPRINT_SPEED : WALK_SPEED;
+
+  // stamina
+  if (wantSprint) stamina = Math.max(0, stamina - 26*dt);
+  else stamina = Math.min(100, stamina + 14*dt);
+
+  // acceleration toward target velocity
+  const targetVX = ix*speed, targetVZ = iz*speed;
+  const accel = 12;
+  player.vx += (targetVX - player.vx) * Math.min(1, accel*dt);
+  player.vz += (targetVZ - player.vz) * Math.min(1, accel*dt);
+
+  [player.x, player.z] = resolveMove(player.x, player.z, player.vx*dt, player.vz*dt, PLAYER_R);
+
+  // --- running animation: figure-8 head-bob (position only) + FOV kick ---
+  const spd = Math.hypot(player.vx, player.vz);
+  const moveAmt = Math.min(1, spd / WALK_SPEED);
+  if (spd > 0.4) {
+    bobPhase += dt * (wantSprint ? 15 : 9.5);
+    const s = Math.sin(bobPhase);
+    if (lastBobSin > 0 && s <= 0) Audio.footstep();     // footfall each cycle
+    lastBobSin = s;
+  } else { bobPhase = 0; lastBobSin = 0; }
+  const bobAmt = moveAmt * (wantSprint ? 1.7 : 1.0);
+  const bobV = Math.sin(bobPhase * 2) * 0.055 * bobAmt;  // vertical bounce
+  const bobH = Math.sin(bobPhase)     * 0.05  * bobAmt;  // lateral sway
+  // Head-bob is POSITION only — never touch camera.rotation (that fights
+  // PointerLockControls and makes the view tumble). Sway rides the right vector.
+  camera.position.set(player.x + rX * bobH, EYE_H + bobV, player.z + rZ * bobH);
+
+  // FOV widens while sprinting for a sense of speed
+  const targetFOV = 72 + (wantSprint ? 10 : 0) * moveAmt;
+  if (Math.abs(camera.fov - targetFOV) > 0.02) {
+    camera.fov += (targetFOV - camera.fov) * Math.min(1, 6 * dt);
+    camera.updateProjectionMatrix();
+  }
+
+  // --- stream the endless world around the player ---
+  streamWorld(false);
+
+  // --- lighting: assign nearest fixtures + flicker ---
+  updateLights(dt);
+
+  // --- flashlight ---
+  const targetIntensity = flashlightOn ? 7.0 : 0.0;
+  flashlight.intensity += (targetIntensity - flashlight.intensity) * Math.min(1, 8*dt);
+  if (flashlightOn && Math.random() < 0.01) flashlight.intensity *= 0.4; // occasional flicker
+
+  // --- pickups ---
+  for (const p of pickups) {
+    if (p.collected) continue;
+    p.mesh.rotation.y += dt * 1.5;
+    p.mesh.position.y = 0.45 + Math.sin(elapsed*2 + p.x) * 0.06;
+    if (Math.hypot(player.x - p.x, player.z - p.z) < 1.4) {
+      p.collected = true; p.mesh.visible = false; p.glow.intensity = 0;
+      collected++; sanity = Math.min(100, sanity + 34);
+      Audio.pickup();
+      updateObjective();
+      if (collected >= PICKUPS_NEEDED) {
+        exitObj.active = true; exitObj.sign.emissiveIntensity = 3.0; exitObj.light.intensity = 4;
+        message('The EXIT is unlocked. Find your way out.', 4);
+      } else {
+        message(`Almond Water  ${collected}/${PICKUPS_NEEDED}`, 2);
+      }
+    }
+  }
+
+  // exit sign pulse
+  if (exitObj.active) exitObj.sign.emissiveIntensity = 2 + Math.sin(elapsed*4)*1.2;
+
+  // --- monsters ---
+  updateMonsters(dt);
+  if (state !== 'playing') return;    // a monster caught us this frame
+
+  // --- exit win check ---
+  if (exitObj.active && Math.hypot(player.x - exitObj.x, player.z - exitObj.z) < 2.0) {
+    win(); return;
+  }
+
+  const near = nearestActiveMonster();
+
+  // --- sanity ---
+  const nearLight = pool.some(l => l.intensity > 2 &&
+    Math.hypot(l.position.x - player.x, l.position.z - player.z) < 6);
+  let dS = -0.5*dt;                              // baseline dread
+  if (nearLight) dS += 1.4*dt;
+  if (near.m && near.dist < 12) dS -= (12 - near.dist) * 0.4 * dt;
+  if (!flashlightOn && !nearLight) dS -= 0.8*dt;
+  sanity = Math.max(0, Math.min(100, sanity + dS));
+
+  // --- tension → audio / heartbeat ---
+  let tension = (100 - sanity) / 100 * 0.5;
+  if (near.m) tension = Math.max(tension, 1 - Math.min(1, near.dist / 20));
+  Audio.setTension(tension);
+  heartTimer -= dt;
+  if (tension > 0.25 && heartTimer <= 0) {
+    Audio.heartbeat(Math.min(1, tension + 0.2));
+    heartTimer = 1.25 - tension * 0.9;
+  }
+
+  // --- Mind Link biofeedback (real EEG if connected, else simulated) ---
+  let danger = tension, blameType = null;
+  if (near.m) {
+    const prox = 1 - Math.min(1, near.dist / 22);
+    const vis = playerSees(near.m);
+    danger = Math.max(danger, prox * (vis ? 1 : 0.6));
+    if (vis || near.dist < 8) blameType = near.m.type;   // blame what's in view when fear spikes
+  }
+  // Our engine: poll affect (drives fear from a real MindLink) + train learning.
+  EngineBridge.tick(dt, { danger, blameType });
+  fearLevel = MindLink.update(dt, { danger, blameType });
+  MindLink.draw();
+  updateMindLinkPanel();
+
+  // --- post fx from sanity / tension ---
+  const low = 1 - sanity/100;
+  fxPass.uniforms.aberration.value = 0.0016 + low * 0.006 + tension * 0.004;
+  fxPass.uniforms.vignette.value = 0.78 + low * 0.15;
+  fxPass.uniforms.grain.value = 0.045 + low * 0.09;
+  fxPass.uniforms.distortion.value = low * 0.7 + tension * 0.5;
+  bloom.strength = 0.65 + tension * 0.5;
+
+  // dark overlay when sanity very low
+  el('dark').style.opacity = String(Math.max(0, (25 - sanity)/25) * 0.5);
+
+  updateCompass();
+  updateHUD();
+}
+
+const _cf = new THREE.Vector3();
+function updateCompass() {
+  let tx = null, tz = null;
+  if (exitObj.active) { tx = exitObj.x; tz = exitObj.z; }
+  else {
+    let best = Infinity;
+    for (const p of pickups) {
+      if (p.collected) continue;
+      const d = (p.x - player.x)**2 + (p.z - player.z)**2;
+      if (d < best) { best = d; tx = p.x; tz = p.z; }
+    }
+  }
+  const comp = el('compass');
+  if (tx === null) { comp.style.opacity = '0'; return; }
+  comp.style.opacity = '0.9';
+  const dx = tx - player.x, dz = tz - player.z;
+  camera.getWorldDirection(_cf);
+  const fl = Math.hypot(_cf.x, _cf.z) || 1;
+  const fxn = _cf.x / fl, fzn = _cf.z / fl;
+  const fc = dx * fxn + dz * fzn;          // forward component (ahead -> up)
+  const rc = dx * (-fzn) + dz * fxn;       // screen-right component (-> clockwise)
+  el('compassArrow').style.transform = `rotate(${Math.atan2(rc, fc)}rad)`;
+  el('compassDist').textContent = Math.round(Math.hypot(dx, dz)) + ' m';
+}
+
+function updateLights(dt) {
+  const px = player.x, pz = player.z;
+  const nearest = [];
+  for (const fx of fixtures) {
+    if (!fx.active) continue;
+    const d2 = (fx.x-px)*(fx.x-px) + (fx.z-pz)*(fx.z-pz);
+    if (nearest.length < LIGHT_POOL) { nearest.push({ fx, d2 }); }
+    else {
+      let mi = 0; for (let i = 1; i < nearest.length; i++) if (nearest[i].d2 > nearest[mi].d2) mi = i;
+      if (d2 < nearest[mi].d2) nearest[mi] = { fx, d2 };
+    }
+  }
+  // flicker every visible fixture; only the nearest ones cast real light
+  for (const fx of fixtures) {
+    if (!fx.active) continue;
+    fx.phase += dt * (4 + fx.seed);
+    let f = 0.88 + 0.12 * Math.sin(fx.phase * 9);
+    if (Math.random() < 0.004) fx.dip = 0.08 + Math.random() * 0.3;
+    fx.dip = Math.min(1, fx.dip + dt * 2.6);
+    f *= fx.dip;
+    fx.flick = f;
+    fx.mat.emissiveIntensity = 2.4 * f;
+  }
+  for (let i = 0; i < pool.length; i++) {
+    const l = pool[i];
+    if (i < nearest.length) {
+      const fx = nearest[i].fx;
+      l.position.set(fx.x, WALL_H - 0.15, fx.z);
+      l.intensity = 9 * fx.flick;
+    } else l.intensity = 0;
+  }
+}
+
+function moveMonster(m, speed, dt) {
+  const dx = player.x - m.x, dz = player.z - m.z;
+  const dl = Math.hypot(dx, dz) || 1;
+  const dirx = dx/dl, dirz = dz/dl, step = speed * dt;
+  const tries = [
+    [dirx*step, dirz*step],
+    [dirx*step, 0], [0, dirz*step],
+    [dirz*step, -dirx*step], [-dirz*step, dirx*step],
+  ];
+  for (const [mx, mz] of tries)
+    if (!blocked(m.x + mx, m.z + mz, ENTITY_R)) { m.x += mx; m.z += mz; break; }
+}
+
+function updateMonsters(dt) {
+  // wake more monsters over time, with each pickup, with fear, and at low sanity
+  monsterRampT += dt;
+  let target = Math.min(MAX_MONSTERS,
+    START_MONSTERS + Math.floor(monsterRampT / 12) + collected + Math.floor(fearLevel / 22)
+    + Math.floor(EngineBridge.escalation * 3));   // the Architect's escalation ramps pressure over runs
+  if (sanity < 35) target = MAX_MONSTERS;
+  for (let i = 0; i < monsters.length && activeCount < target; i++) {
+    if (!monsters[i].active) {
+      monsters[i].active = true; monsters[i].mesh.visible = true;
+      spawnMonster(monsters[i], 26, 46); activeCount++;
+    }
+  }
+
+  for (const m of monsters) {
+    if (!m.active) continue;
+    const t = m.def;
+    let speed;
+    if (t.freeze)       speed = playerSees(m) ? 0 : t.hunt;                                   // freezes while watched
+    else if (t.charge)  speed = lineOfSightClear(m.x, m.z, player.x, player.z) ? t.chase : t.hunt; // sprints on sight
+    else                speed = t.hunt;                                                        // relentless
+    if (speed > 0) moveMonster(m, speed, dt);
+
+    m.sway += dt;
+    m.mesh.position.set(m.x, Math.sin(m.sway * 2) * 0.02, m.z);
+    m.mesh.rotation.y = Math.atan2(player.x - m.x, player.z - m.z);
+
+    const d = Math.hypot(m.x - player.x, m.z - player.z);
+    if (d < t.catch) { die(m); return; }                     // caught = death (the only way to die)
+    if (d > 62 && !playerSees(m)) spawnMonster(m, 24, 44);   // recycle stragglers to keep pressure
+  }
+}
+
+function updateHUD() {
+  el('sanityFill').style.width = sanity.toFixed(1) + '%';
+  el('staminaFill').style.width = stamina.toFixed(1) + '%';
+}
+
+function animate() {
+  requestAnimationFrame(animate);
+  const dt = Math.min(0.05, clock.getDelta());
+
+  if (state === 'playing') {
+    updatePlaying(dt);
+  } else if (state === 'dying') {
+    dyingTimer -= dt;
+    // heavy distortion during jumpscare
+    fxPass.uniforms.distortion.value = 1.4;
+    fxPass.uniforms.aberration.value = 0.02;
+    fxPass.uniforms.grain.value = 0.2;
+    if (killer) {
+      killer.mesh.rotation.y = Math.atan2(camera.position.x - killer.x, camera.position.z - killer.z);
+      killer.mesh.position.y = Math.sin(performance.now()*0.02)*0.1;
+    }
+    if (dyingTimer <= 0) { state = 'dead'; show('dead'); Audio.suspend(); }
+  }
+
+  // message fade
+  if (msgTimer > 0) { msgTimer -= dt; if (msgTimer <= 0) el('message').style.opacity = '0'; }
+
+  fxPass.uniforms.time.value += dt;
+  composer.render();
+}
+
+/* ============================================================
+   BOOT
+============================================================ */
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+  bloom.setSize(innerWidth, innerHeight);
+});
+
+buildMonsters();
+placeObjectives();
+streamWorld(true);          // build the maze around spawn for the menu backdrop
+MindLink.init();            // sets up the biofeedback graph + SIM fallback
+// Connect to our Python engine (Architect script + escalation + learning). This
+// is also how a real MindLink is used — via the engine's serial adapter, not the
+// browser. Non-blocking; the game plays standalone if the engine isn't running.
+EngineBridge.connect(location.origin).then(ok => {
+  const s = document.getElementById('mlStatus');
+  if (ok && s && s.textContent === 'SIM') s.title = 'Engine connected — click “Connect Mind Link” to read a headset';
+});
+el('loader').classList.add('hidden');
+animate();
+</script>

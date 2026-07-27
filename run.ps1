@@ -1,6 +1,8 @@
-# One-command launcher: starts the engine, waits for it, runs the game, cleans up.
-# Usage:  double-click run.bat, or:  powershell -ExecutionPolicy Bypass -File run.ps1 [COM]
-param([int]$Com = 7)
+# One-command launcher (Windows): start the engine, open the WebGL game, clean up.
+# Usage:  double-click run.bat, or:  powershell -ExecutionPolicy Bypass -File run.ps1
+#
+# This replaces the old DirectX 12 native runtime. The game now runs in the
+# browser (pure canvas + WebAudio) so there is nothing to compile.
 
 $ErrorActionPreference = "SilentlyContinue"
 $root = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -8,12 +10,6 @@ Set-Location $root
 
 $py = Join-Path $root ".venv\Scripts\python.exe"
 if (-not (Test-Path $py)) { $py = "python" }   # fall back to system python
-
-# First run: auto-acquire the AI's asset plan (models + characters + audio).
-if (-not (Test-Path (Join-Path $root "assets\manifest.json"))) {
-    Write-Host "First run — auto-downloading assets (models, characters, audio)..."
-    & $py (Join-Path $root "tools\fetch_assets.py") "abandoned asylum" "darkness,isolation"
-}
 
 Write-Host "Starting the engine (brain)..."
 $engine = Start-Process $py -ArgumentList "-m","uvicorn","engine.main:app","--port","8000" `
@@ -28,15 +24,15 @@ for ($i = 0; $i -lt 60; $i++) {
     } catch { Start-Sleep -Milliseconds 500 }
 }
 if (-not $up) {
-    Write-Host "Engine did not start. Check that the .venv exists and deps are installed."
+    Write-Host "Engine did not start. Install deps:  pip install -r requirements-dev.txt"
     if ($engine) { Stop-Process -Id $engine.Id -Force }
     exit 1
 }
-Write-Host "Engine up. Launching the game (COM$Com)... WASD move, mouse look, TAB free cursor, Esc quit."
 
-# Run the renderer (blocks until the window is closed).
-& (Join-Path $root "runtime\build\runtime.exe") $Com
+Write-Host "Engine up. Opening the game in your browser..."
+Write-Host "  WASD/arrows move, mouse look, Esc release cursor. API docs: http://localhost:8000/docs"
+Start-Process "http://localhost:8000/"
 
-# Clean up the engine when the game exits.
-Write-Host "Game closed. Stopping the engine."
+Write-Host "Game running. Press Enter here to stop the engine."
+[void][System.Console]::ReadLine()
 if ($engine) { Stop-Process -Id $engine.Id -Force }

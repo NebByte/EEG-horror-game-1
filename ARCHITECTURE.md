@@ -33,8 +33,9 @@ contracts in one place means the API, EEG, generative, and experience layers all
 speak the same language.
 
 ### `engine/eeg/` — signal → affect
-- `bands.py` — converts an `EEGChunk` into relative band powers via an FFT
-  periodogram, plus `frontal_alpha_asymmetry()` (the approach/withdrawal proxy
+- `bands.py` — converts an `EEGChunk` into relative band powers via a **Welch
+  PSD** (Hann windows + overlap; a plain periodogram is the short-window
+  fallback), plus `frontal_alpha_asymmetry()` (the approach/withdrawal proxy
   used for valence).
 - `affect.py` — maps band powers to an `AffectState` using transparent,
   tunable heuristics (documented inline with their EEG correlates). This is
@@ -63,6 +64,85 @@ AffectState`) a model must later satisfy.
 decision that will change (Vertex today, maybe a self-hosted diffusion model or
 ElevenLabs for audio tomorrow). The rest of the engine depends only on the ABC.
 
+### `engine/architect/` — the Architect (the script is the game)
+The Architect authors a personalized **Script** and learns the player over time.
+
+- `datapoints.py` — the **DataPoint** catalog: small, **procedural** ingredients
+  (spaces, encounters, audio, lighting, events, props). Each stores *parameters*
+  (seeds, dims, palettes) not baked media, plus `fear_affinity` (which fears it
+  plays on) and `enhances` (which DataPoints it combines with well). The catalog
+  is tiny on purpose — the value is in *combination*, not asset count.
+- `script.py` — a **Script** is an ordered list of **Beats**; each Beat is a mood
+  + target tension + the DataPoints active during it. The Architect authors the
+  arc; the live EEG director modulates *within* the current beat.
+- `composer.py` — the composer. `MockComposer` selects DataPoints per beat by
+  intensity fit, the player's stated fears, and their learned scores, then
+  *enhances* strong picks by pulling in partner DataPoints. `AnthropicComposer`
+  lets **Claude** author the Script from the catalog + player model, degrading to
+  the mock on any error. `get_composer()` chooses from config.
+- `learning.py` — the **PlayerModel**: per-DataPoint / per-tag / per-fear scores
+  *and* per-pair co-occurrence scores, updated from reactions (EEG + CV affect),
+  persisted as JSON so it improves across restarts. This is the "re-author a
+  fresh combination that has learned you" loop: compose reads the model, play
+  posts reactions, the model updates for next time.
+- `evolution.py` — the model doesn't just *score* DataPoints, it **breeds** them.
+  From the learned scores it decides, each run: **enhance** (link DataPoints the
+  player reacts to best *together*, from learned co-occurrence), **copy/reuse**
+  (high scorers rank up), and **breed similar** — *mutate* a top DataPoint into a
+  near-variant and *cross* two into a hybrid, producing brand-new personalized
+  DataPoints that join the player's `evolved_catalog` and feed the next script.
+  Deterministic per player, growing as reactions accumulate. This is an online-
+  learning + evolutionary approach (explainable, right-sized for tiny per-player
+  data) — the same `EEGChunk → reaction → model` interface a trained net can
+  later slot behind.
+
+**Why not just generate everything?** Generation is slow, costly, and
+non-deterministic. Composing from a curated procedural catalog is fast, cheap,
+explainable, and personalizable — so generation is reserved for the rare case
+the catalog genuinely can't express what the Architect wants.
+
+### `engine/assets/` — fresh assets every run + escalation
+Turns the Architect's abstract DataPoints into concrete media (maps, models,
+characters, pictures, sounds, animations), resolved **fresh for every run**.
+
+- `models.py` — the `MediaAsset` contract (kind, source, uri/params, license, seed).
+- `sources.py` — `ProceduralAssetSource` synthesises an infinite space of asset
+  variants from a seed (palettes, geometry/texture seeds, synth params, animation
+  clips) — offline, kkrieger-style, nothing heavy on disk. `MultiLibrarySource`
+  routes each asset kind through several open libraries (`libraries.py`) with
+  procedural as the always-available floor.
+- `libraries.py` — real integrations: **Poly Haven** (CC0 textures/HDRIs/models,
+  keyless), **Freesound** (sounds, API token), **Sketchfab** (models/animations,
+  API token), and a curated **CC0 pack** index (Kenney / OpenGameArt). Each parses
+  its API into a `MediaAsset` (pure, unit-tested `_parse_*`) with license +
+  attribution for the manifest (`GET /sessions/{id}/assets/manifest`).
+- `resolver.py` — seeds each asset from `(run_seed, datapoint_id, kind)`, so a run
+  is internally consistent but different from every other run.
+
+**Escalation ("scarier and scarier").** The `PlayerModel` counts `runs`; each
+compose bumps it and raises `escalation`, which the composer uses to lift the
+tension ceiling, shorten beats (faster pacing), and bias selection toward more
+intense DataPoints. The per-run asset seed changes with it, so every restart is a
+hotter, different game.
+
+### `engine/eeg/` — hardware: the NeuroSky MindLink
+`sources.py` includes a `MindLinkSource` (alias `NeuroSkySource`) that speaks the
+ThinkGear serial protocol: a single-channel (FP1) dry-electrode headset sampling
+raw EEG at 512 Hz, plus the eSense Attention/Meditation meters and a Poor-Signal
+quality value used for contact gating. `parse_thinkgear_payload()` is a pure,
+unit-tested parser (raw wave, poor-signal, attention/meditation, ASIC band
+powers). Being single-channel, it can't compute frontal alpha asymmetry, so
+valence falls back to neutral and fear is driven by arousal + stress + bands.
+
+Around the raw signal: `bands.py` uses **Welch PSD** (Hann windows + overlap) for
+lower-variance band powers; `artifacts.py` flags blink / EMG / motion and turns
+poor-signal into a per-window **confidence** (the director holds on low-confidence
+windows instead of reacting to noise); `calibration.py` records a resting baseline
+so affect is centered on *this* player. `affect.fuse_cv()` fuses an optional
+**computer-vision (webcam) affect** as a second modality — the browser computes a
+motion/startle proxy locally (only the derived numbers are sent), ready to swap
+for a real facial-expression model.
+
 ### `engine/experience/` — the director
 - `orchestrator.py` — the core creative logic. Given `AffectState` + the
   `AssetBank`, it:
@@ -79,8 +159,40 @@ ElevenLabs for audio tomorrow). The rest of the engine depends only on the ABC.
 ### `engine/api/` — the surface
 FastAPI. `sessions.py` covers lifecycle + (background) generation; `eeg.py`
 covers the REST batch endpoint and the WebSocket live loop; `health.py` for
-readiness. `main.py` wires routers under `API_PREFIX` (default `/v1`) and opens
-CORS for local game clients.
+readiness. `main.py` wires routers under `API_PREFIX` (default `/v1`), opens
+CORS for local game clients, and mounts the `web/` client at `/`.
+
+### `web/` — the game clients (replaces the DirectX runtime)
+Two clients ship. **THE BACKROOMS** (`web/index.html`) is the flagship: a
+first-person WebGL horror game (Three.js, vendored offline in `web/vendor/`) —
+infinite procedural maze, four stalker AIs, post-processing, synthesized audio,
+and a real win/lose loop. Its `EngineBridge` connects to the engine: the Architect
+composes each run, its `escalation` ramps the monsters, reactions train the
+learning layer, and a real MindLink is read by the engine's serial adapter
+(`engine/eeg/runner.py` + `POST /sessions/{id}/eeg/source`) so the affect model
+drives the fear — no browser Bluetooth. It falls back to a simulated fear when no
+engine/headset is present.
+
+The **classic client** (`web/classic.html`) is a dependency-free **raycasting**
+renderer in pure HTML5 canvas + WebAudio — no libraries, no build. `js/game.js`
+is the renderer + audio + two input modes:
+
+- **Local sim** — a compact JS mirror of the Python affect + director so the
+  game plays standalone (open the file, no server, no headset).
+- **Live engine** — creates a session, streams synthetic `EEGChunk`s to the
+  WebSocket `/stream`, and renders the `Directive`s the engine returns.
+
+The renderer maps a `Directive` straight onto what you see and hear: `mood`
+tints the walls, `intensity` drives fog/darkness and the stalker's aggression,
+`heartbeat_bpm` sets the WebAudio pulse, `flicker` darkens the lights, and
+`safety_backoff` forces the calm `relief` palette.
+
+**Why a browser client?** The original plan was a native **DirectX 12** runtime
+(`runtime/`, C++/CMake/vcpkg). It was Windows-only, heavy to build, and never
+ran. Because the engine already exposes everything over HTTP + WebSocket, the
+client is just a consumer of `Directive`s — so a zero-install web renderer gives
+the same experience on every platform. Unity/Unreal remain drop-in alternatives
+against the identical API.
 
 ## Data flow (live loop)
 
@@ -104,7 +216,7 @@ game client ◀──affect+directive──┘
 | In-memory session store | Zero infra for the prototype | Single-process only; move to Redis/Firestore for horizontal scale |
 | Provider ABC + mock fallback | Runs with no cloud; swappable backends | Mock isn't representative of real latency/cost |
 | Pre-generate an asset bank | Keeps the live loop model-free & fast | Less "infinite" variety than per-moment generation; add streaming gen later |
-| FFT periodogram (not Welch) | Minimal deps, easy to read | Noisier estimates; add proper windowing + artifact rejection for real signals |
+| Welch PSD (numpy only, no scipy) | Low-variance estimate, minimal deps | Slightly more compute than a single periodogram; add artifact rejection for real signals |
 | Directive = named IDs, not media | Engine stays media-agnostic; client resolves assets | Client must know how to fetch/resolve URIs |
 
 ## Scaling path (summary)

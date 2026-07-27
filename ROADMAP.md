@@ -24,31 +24,47 @@ Check items off as you go.
   Claude/mock composer that authors a personalized **Script** (the level+event
   graph), plus a learning layer that updates a persisted per-player model from
   reactions. API: `GET /sessions/{id}/script`, `POST /sessions/{id}/reactions`
-- 🟡 **DX12 runtime scaffold** (`runtime/`): CMake+vcpkg project; a client that
-  composes a Script and prints the authored level (protocol proven). Renderer
-  (DirectX 12 + glTF/Draco + ozz + XAudio2) is the next build-out
+- 🟢 **Browser/WebGL game client** (`web/`): a first-person raycasting horror
+  renderer in pure HTML5 canvas + WebAudio — no engine, no build, cross-platform.
+  Consumes directives live over WebSocket (or runs standalone on a JS affect sim).
+  **This replaces the abandoned DirectX 12 native runtime** (`runtime/`), which
+  was Windows-only, required a C++/CMake/vcpkg toolchain, and never built cleanly.
 
 ---
 
 ## Workstream A — EEG hardware & ingestion
 Turn real headset data into clean `EEGChunk`s.
 
-- ⬜ **A1** Integrate a real headset SDK (LSL / Muse / OpenBCI / Emotiv) → adapter that emits `EEGChunk`
-- ⬜ **A2** Build a device gateway (client-side) that streams to the WS `/stream` endpoint
-- ⬜ **A3** Signal quality: contact/impedance check, dropout detection, per-channel gating
-- ⬜ **A4** Artifact rejection (eye blinks / EMG / motion) before band-power extraction
-- ⬜ **A5** Replace FFT periodogram with Welch + proper windowing/overlap
+- 🟡 **A1** Real headset adapter — **NeuroSky MindLink** (ThinkGear) implemented:
+  single-channel FP1 @ 512 Hz, pure unit-tested packet parser, eSense +
+  poor-signal surfaced (`engine/eeg/sources.py`), and driven **server-side** for
+  a session so the browser game reads a headset through the engine
+  (`engine/eeg/runner.py`, `POST /sessions/{id}/eeg/source`). Verify against real
+  hardware; add LSL / Muse / OpenBCI / Emotiv adapters behind the same interface
+- 🟢 **A2** Client-side device gateway streams to the WS `/stream` (`engine/eeg/gateway.py`)
+- 🟡 **A3** Signal quality: MindLink poor-signal gating + per-window confidence in
+  place (`engine/eeg/artifacts.py`), surfaced in the game HUD; add impedance +
+  dropout detection
+- 🟢 **A4** Artifact rejection (blink / EMG / motion) with confidence gating — the
+  director holds on low-confidence windows instead of reacting to noise
+- 🟢 **A5** Welch PSD with Hann windowing + overlap (`engine/eeg/bands.py`)
 - ⬜ **A6** Timestamp sync & jitter handling across channels
 
 ## Workstream B — Affect model
 Move from heuristics to a validated model behind the same `EEGChunk → AffectState` interface.
 
-- ⬜ **B1** Calibration routine per player (baseline eyes-open/closed, resting FAA)
+- 🟡 **B1** Calibration: resting-baseline capture + affect re-centering
+  (`engine/eeg/calibration.py`, `POST /sessions/{id}/calibrate`); add the guided
+  eyes-open/closed protocol UI
 - ⬜ **B2** Data collection protocol + labelling (self-report + stimulus tags) with consent
 - ⬜ **B3** Train a classifier/regressor (arousal/valence → fear/stress), validate against heuristics
 - ⬜ **B4** Serve it on a Vertex AI Endpoint; wire behind `infer_affect` as a strategy
 - ⬜ **B5** Online personalization / drift correction during a session
-- ⬜ **B6** Confidence-aware fusion (ignore low-SNR windows in the director)
+- 🟢 **B6** Confidence-aware fusion — low-confidence (artifact/poor-signal)
+  windows don't move the director
+- 🟡 **B7** Multimodal fusion: computer-vision (webcam) affect fused with EEG
+  (`fuse_cv`, `CvAffect`); browser sends a motion/startle proxy now — swap in a
+  real facial-expression model next
 
 ## Workstream C — Generative assets
 Make the asset bank real, richer, and cheaper.
@@ -70,16 +86,30 @@ Make the asset bank real, richer, and cheaper.
 - ⬜ **C5** Asset caching & dedup keyed on seed (don't regenerate identical banks)
 - ⬜ **C6** Streaming / just-in-time generation for long sessions (beyond the 4-mood bank)
 - ⬜ **C7** Cost controls: budgets, model tiering, batch generation
+- 🟢 **C8** **Per-run asset resolution** (`engine/assets/`): every DataPoint
+  resolves to fresh, procedurally-varied media (map/model/character/image/sound/
+  animation) seeded per run — different every playthrough, offline, no bloat
+- 🟢 **C9** **Multiple open-asset libraries** (`engine/assets/libraries.py`): Poly
+  Haven (CC0, keyless), Freesound, Sketchfab, and CC0 packs, routed per asset
+  kind with procedural fallback + a licensing/attribution manifest
+  (`GET /sessions/{id}/assets/manifest`). Add on-disk caching + real downloads
+- ⬜ **C10** Live media into the browser client (fetch resolved URIs: textures,
+  audio, models) — pairs with the WebGPU renderer (workstream I)
 
 ## Workstream D — Experience / director
 Deeper, smarter real-time adaptation.
 
 - 🟢 **D1** Tension curve + mood selection + safety back-off (prototype)
 - ⬜ **D2** Richer director policy (pacing beats, jump-scare cooldowns, habituation modelling)
-- ⬜ **D3** Per-player fear model: learn what *this* player reacts to, weight assets accordingly
+- 🟢 **D3** Per-player fear model: learns what *this* player reacts to (DataPoint
+  / tag / fear / co-occurrence scores) and **breeds new personalized DataPoints**
+  (mutation + crossover) from the top performers (`engine/architect/evolution.py`)
 - ⬜ **D4** Difficulty/comfort modes (intensity caps, opt-out categories)
 - ⬜ **D5** Deterministic replay of a session from recorded affect (for tuning/QA)
 - ⬜ **D6** A/B experiment hooks for director policies
+- 🟢 **D7** **Escalation across runs** ("scarier and scarier"): a persisted per-
+  player run counter raises the tension ceiling, shortens beats, and biases
+  toward more intense DataPoints each restart (`PlayerModel.escalation()`)
 
 ## Workstream E — Platform, API & scale
 Production-grade service.
@@ -95,10 +125,45 @@ Production-grade service.
 ## Workstream F — Game client integration
 Close the loop with an actual game.
 
-- ⬜ **F1** Reference Unity (or Unreal) client: consume `Directive`, resolve assets by URI/id
-- ⬜ **F2** Asset resolver: download/stream sounds, spawn characters, apply map mutations
-- ⬜ **F3** In-game debug overlay (live affect + directive + safety state)
-- ⬜ **F4** Latency budget & smoothing on the client side
+- 🟢 **F1** Reference **web/WebGL client**: consumes `Directive` live over the
+  WebSocket `/stream` (replaces the DirectX runtime; Unity/Unreal still optional)
+- 🟡 **F2** Asset resolver: the web client maps directives to walls/fog/stalker/
+  heartbeat now; downloading real generated media (Imagen art, Lyria audio) by
+  `Asset.uri` is the remaining piece
+- 🟢 **F3** In-game debug overlay (live affect + directive + safety state HUD)
+- 🟡 **F4** Latency budget & smoothing (director already smooths intensity;
+  client-side interpolation/prediction still to add)
+
+## Workstream I — High-fidelity runtime (WASM + WebGPU) & procedural assets
+Take the browser client from the raycasting prototype to a real 3D horror engine
+that still runs everywhere — and keep the footprint tiny.
+
+> **On "DirectX in the browser":** browsers can't call DirectX directly. The
+> browser's **WebGPU** implementation runs on **Direct3D 12** under the hood on
+> Windows (Metal on macOS, Vulkan on Linux). So a **WASM + WebGPU** game *is*
+> DirectX-backed GPU rendering on Windows while still running cross-platform in
+> the browser — that's how we honour "DirectX" and "runs in the browser" at once.
+> A separate native DirectX desktop build is possible but can't run in a browser.
+
+- 🟢 **I1** Real 3D WebGL renderer — **THE BACKROOMS** (`web/index.html`, Three.js
+  vendored offline): infinite procedural maze, 4 stalker AIs, post-processing,
+  synthesized audio, sanity/stamina, and a **win/lose game loop** (find 3 Almond
+  Waters → reach the Exit). Wired to the engine: Architect script + escalation +
+  learning, and a real MindLink read by the engine's serial adapter
+- ⬜ **I2** Compile the runtime to **WebAssembly** (Rust `wgpu`, or C++ via
+  Emscripten) for near-native performance; WebGPU pass for a `Directive`-driven
+  material/fog pipeline
+- ⬜ **I3** **Procedural asset compiler** (kkrieger-style, the 96 KB demoscene
+  approach): DataPoint `params` (seeds/dims/palettes) → meshes, textures and
+  audio generated **into RAM at load** — tiny on disk, full-fidelity in memory
+- ⬜ **I4** Lossless asset packer: a build script that scans authored/imported
+  assets and packs them 1:1 (dedup + lossless compression), so nothing bloats
+- ⬜ **I5** Open model/animation import (e.g. Mixamo, other openly-licensed
+  sources) with a license/attribution manifest; retarget onto encounter rigs
+- ⬜ **I6** Script-driven runtime: walk the Beats, instantiate each Beat's
+  DataPoints, hand off to the live EEG director for second-to-second modulation
+- ⬜ **I7** Computer-vision affect: fuse webcam facial-affect into the reaction
+  signal alongside EEG (the `cv_affect` field already exists on reactions)
 
 ## Workstream G — Safety, ethics & compliance
 Non-negotiable before real users.
