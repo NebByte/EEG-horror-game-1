@@ -34,6 +34,10 @@ class Session:
     generating: bool = False
     generation_error: str | None = None
     baseline: AffectState | None = None  # per-player resting calibration
+    # An engine-run EEG source (our MindLink adapter / simulator) feeding this session.
+    eeg_source: str | None = None
+    eeg_source_error: str | None = None
+    last_quality: dict | None = None
     history: deque = field(default_factory=lambda: deque(maxlen=_HISTORY))
     last_affect: AffectState | None = None
     last_directive: Directive | None = None

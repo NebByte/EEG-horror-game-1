@@ -37,8 +37,10 @@ Turn real headset data into clean `EEGChunk`s.
 
 - 🟡 **A1** Real headset adapter — **NeuroSky MindLink** (ThinkGear) implemented:
   single-channel FP1 @ 512 Hz, pure unit-tested packet parser, eSense +
-  poor-signal surfaced (`engine/eeg/sources.py`). Verify against real hardware;
-  add LSL / Muse / OpenBCI / Emotiv adapters behind the same interface
+  poor-signal surfaced (`engine/eeg/sources.py`), and driven **server-side** for
+  a session so the browser game reads a headset through the engine
+  (`engine/eeg/runner.py`, `POST /sessions/{id}/eeg/source`). Verify against real
+  hardware; add LSL / Muse / OpenBCI / Emotiv adapters behind the same interface
 - 🟢 **A2** Client-side device gateway streams to the WS `/stream` (`engine/eeg/gateway.py`)
 - 🟡 **A3** Signal quality: MindLink poor-signal gating + per-window confidence in
   place (`engine/eeg/artifacts.py`), surfaced in the game HUD; add impedance +
@@ -143,10 +145,14 @@ that still runs everywhere — and keep the footprint tiny.
 > the browser — that's how we honour "DirectX" and "runs in the browser" at once.
 > A separate native DirectX desktop build is possible but can't run in a browser.
 
-- ⬜ **I1** WebGPU renderer (WebGL2 fallback) driven by the same `Directive` +
-  `Script`; port the raycaster's role to real 3D corridors/rooms
+- 🟢 **I1** Real 3D WebGL renderer — **THE BACKROOMS** (`web/index.html`, Three.js
+  vendored offline): infinite procedural maze, 4 stalker AIs, post-processing,
+  synthesized audio, sanity/stamina, and a **win/lose game loop** (find 3 Almond
+  Waters → reach the Exit). Wired to the engine: Architect script + escalation +
+  learning, and a real MindLink read by the engine's serial adapter
 - ⬜ **I2** Compile the runtime to **WebAssembly** (Rust `wgpu`, or C++ via
-  Emscripten) for near-native performance in the browser
+  Emscripten) for near-native performance; WebGPU pass for a `Directive`-driven
+  material/fog pipeline
 - ⬜ **I3** **Procedural asset compiler** (kkrieger-style, the 96 KB demoscene
   approach): DataPoint `params` (seeds/dims/palettes) → meshes, textures and
   audio generated **into RAM at load** — tiny on disk, full-fidelity in memory

@@ -26,6 +26,9 @@ class SessionSummary(BaseModel):
     has_bank: bool
     generating: bool
     generation_error: str | None = None
+    eeg_source: str | None = None
+    eeg_source_error: str | None = None
+    last_quality: dict | None = None
     last_affect: dict | None = None
     last_directive: dict | None = None
 
@@ -74,6 +77,9 @@ async def get_session(sid: str) -> SessionSummary:
         has_bank=sess.bank is not None,
         generating=sess.generating,
         generation_error=sess.generation_error,
+        eeg_source=sess.eeg_source,
+        eeg_source_error=sess.eeg_source_error,
+        last_quality=sess.last_quality,
         last_affect=sess.last_affect.model_dump() if sess.last_affect else None,
         last_directive=sess.last_directive.model_dump() if sess.last_directive else None,
     )

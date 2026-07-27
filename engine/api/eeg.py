@@ -64,6 +64,37 @@ async def calibrate(sid: str, req: CalibrateRequest) -> dict:
     return {"baseline": sess.baseline.model_dump(), "windows": len(req.chunks)}
 
 
+class EegSourceRequest(BaseModel):
+    # "mindlink"/"neurosky" (our serial adapter) or "simulator".
+    kind: str = Field("simulator", pattern=r"^(mindlink|neurosky|mindwave|simulator)$")
+    port: str = Field("COM7", max_length=64)
+    baudrate: int = Field(57600, ge=1200, le=921600)
+
+
+@router.post("/{sid}/eeg/source")
+async def start_eeg_source(sid: str, req: EegSourceRequest) -> dict:
+    """Start an engine-run EEG source (our MindLink adapter or the simulator)
+    feeding this session. Read the resulting affect via GET /sessions/{id}."""
+    sess = store.get(sid)
+    if sess is None:
+        raise HTTPException(404, "session not found")
+    from engine.eeg import runner
+
+    runner.start(sid, req.kind, req.port, req.baudrate)
+    return {"ok": True, "kind": req.kind, "port": req.port}
+
+
+@router.delete("/{sid}/eeg/source")
+async def stop_eeg_source(sid: str) -> dict:
+    from engine.eeg import runner
+
+    runner.stop(sid)
+    sess = store.get(sid)
+    if sess is not None:
+        sess.eeg_source = None
+    return {"ok": True}
+
+
 @router.websocket("/{sid}/stream")
 async def stream(ws: WebSocket, sid: str) -> None:
     await ws.accept()

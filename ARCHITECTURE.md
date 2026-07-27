@@ -161,10 +161,20 @@ covers the REST batch endpoint and the WebSocket live loop; `health.py` for
 readiness. `main.py` wires routers under `API_PREFIX` (default `/v1`), opens
 CORS for local game clients, and mounts the `web/` client at `/`.
 
-### `web/` — the game client (replaces the DirectX runtime)
-A first-person **raycasting** renderer in pure HTML5 canvas + WebAudio — no
-game engine, no libraries, no build step, no DirectX. `index.html` is the HUD
-and controls; `js/game.js` is the renderer + audio + two input modes:
+### `web/` — the game clients (replaces the DirectX runtime)
+Two clients ship. **THE BACKROOMS** (`web/index.html`) is the flagship: a
+first-person WebGL horror game (Three.js, vendored offline in `web/vendor/`) —
+infinite procedural maze, four stalker AIs, post-processing, synthesized audio,
+and a real win/lose loop. Its `EngineBridge` connects to the engine: the Architect
+composes each run, its `escalation` ramps the monsters, reactions train the
+learning layer, and a real MindLink is read by the engine's serial adapter
+(`engine/eeg/runner.py` + `POST /sessions/{id}/eeg/source`) so the affect model
+drives the fear — no browser Bluetooth. It falls back to a simulated fear when no
+engine/headset is present.
+
+The **classic client** (`web/classic.html`) is a dependency-free **raycasting**
+renderer in pure HTML5 canvas + WebAudio — no libraries, no build. `js/game.js`
+is the renderer + audio + two input modes:
 
 - **Local sim** — a compact JS mirror of the Python affect + director so the
   game plays standalone (open the file, no server, no headset).

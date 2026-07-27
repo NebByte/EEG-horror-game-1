@@ -43,9 +43,11 @@ def main() -> int:
             engine.terminate()
             return 1
 
-        print(f"Engine up. Opening the game at {BASE}/")
-        print("  · WASD / arrows to move, mouse to look, Esc to release the cursor")
-        print("  · Use the 'Local sim' fear slider, or switch to 'Live engine'")
+        print(f"Engine up. Opening THE BACKROOMS at {BASE}/")
+        print("  · WASD move · mouse look · Shift sprint · F flashlight · Esc pause")
+        print("  · Find 3 Almond Waters, then reach the Exit — something stalks the halls")
+        print("  · 'Connect Mind Link' reads a real NeuroSky headset via the engine")
+        print("  · Classic raycaster client: " + BASE + "/classic.html")
         print("  · API docs: " + BASE + "/docs")
         webbrowser.open(f"{BASE}/")
         print("\nPress Ctrl+C here to stop the engine.")

@@ -13,13 +13,22 @@ modulates those assets at runtime from the measured affect. Everything is
 exposed over an **HTTP + WebSocket API** so any game client (Unity, Unreal, web)
 can drive it.
 
-The game itself ships as a **browser client** (`web/`) — a first-person
-raycasting horror renderer written in pure HTML5 canvas + WebAudio, **no engine,
-no build, no plugins**. It runs on Windows, macOS and Linux by opening one file.
-It **plays the Architect's Script**: procedurally generated, textured levels
-(built from seeds into RAM, kkrieger-style), distinct stalkers per encounter,
-and it reshapes fog, lighting, heartbeat and the monster in real time from your
-affect — then **posts your reactions back so the model learns you as you play**.
+The flagship client is **THE BACKROOMS** (`web/index.html`) — a first-person
+WebGL horror game (Three.js, vendored locally in `web/vendor/` so it runs fully
+offline): an **infinite procedural maze**, four distinct stalkers (some freeze
+while you watch them, some charge on sight), sanity/stamina, a flashlight, a
+compass, synthesized audio, full post-processing, and a real **win/lose** loop —
+find 3 Almond Waters, then reach the Exit. It is wired to the engine's brain: the
+**Architect composes the run** and its **escalation** ramps the monsters, your
+**reactions train** the learning/evolution layer, and a real **MindLink headset
+is read by the engine** (over its serial/COM port — *our* adapter, not browser
+Bluetooth) so your brain drives the fear. It plays standalone (simulated fear)
+when no headset is connected. Because it uses ES modules, run it **via the
+engine** (`python run.py`), not by double-clicking.
+
+A dependency-free **classic raycaster** client is also included at
+`web/classic.html` (pure canvas, opens by double-clicking) for the zero-install
+path and the Architect HUD.
 
 > **Why not DirectX?** The old plan was a native DirectX 12 runtime. It was
 > Windows-only, needed a heavy C++/CMake/vcpkg toolchain, and never built
@@ -142,9 +151,14 @@ reporting eSense Attention/Meditation and a signal-quality value. The
 `mindlink` source (`engine/eeg/sources.py`) parses that stream; because it's a
 *single* channel it can't measure frontal alpha asymmetry, so valence falls back
 to neutral and fear is driven by arousal + stress + band powers. Install the
-serial deps with `pip install -r requirements-eeg.txt`, then:
+serial deps with `pip install -r requirements-eeg.txt`, then either:
 
 ```bash
+# In THE BACKROOMS: click "Connect Mind Link" and enter the COM port — the engine
+# reads the headset server-side (POST /v1/sessions/{id}/eeg/source) and your
+# brain drives the fear. No browser Bluetooth; our signal pipeline throughout.
+
+# …or stream it to a session from the terminal:
 python run_eeg.py mindlink COM7   # COM port the headset pairs on (57600 baud)
 ```
 
@@ -238,12 +252,14 @@ engine/
   config.py          env-driven settings
   schemas.py         shared pydantic contracts
   api/               HTTP + WS routers (health, sessions, eeg)
-  eeg/               band powers, affect model, simulator, sources, gateway
+  eeg/               band powers, affect, simulator, sources, gateway, runner
   generative/        provider interface, mock, pipeline
   architect/         DataPoints + Script composer (Claude/mock) + learning
   experience/        orchestrator (director) + session store
-web/                 browser/WebGL game client (replaces the DirectX runtime)
-  index.html         HUD + controls
+web/                 browser game clients (replaces the DirectX runtime)
+  index.html         THE BACKROOMS — flagship Three.js game, wired to the engine
+  vendor/three/      vendored Three.js (offline, no CDN)
+  classic.html       dependency-free raycaster client + Architect HUD
   js/game.js         raycasting renderer, affect sim, engine client, audio
 scripts/demo_loop.py end-to-end offline demo
 run.py / run.sh      one-command launchers (start engine + open the game)
