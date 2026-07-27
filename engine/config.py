@@ -33,9 +33,11 @@ class Settings(BaseSettings):
     gcs_bucket: str = ""
 
     # --- Architect (the "script" composer) ---
-    # "mock"     -> deterministic offline composer weighted by the player model
-    # "anthropic"-> Claude composes the script (needs anthropic SDK + API key)
-    architect_provider: str = "mock"
+    # "anthropic"-> Claude composes the script (default). It degrades to the mock
+    #               composer automatically when no API key / SDK is present, so a
+    #               fresh install runs either way — pasting a key just turns it live.
+    # "mock"     -> force the deterministic offline composer.
+    architect_provider: str = "anthropic"
     architect_model: str = "claude-opus-4-8"
     anthropic_api_key: str = ""
     # Where per-player learning models are persisted (JSON).

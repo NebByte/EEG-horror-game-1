@@ -103,16 +103,26 @@ Full design in [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 ---
 
-## Quickstart (offline, no cloud, no headset)
+## Quickstart
 
 ```bash
 pip install -r requirements-dev.txt
+pip install anthropic                 # optional — for the live Claude architect
 
-# Play it — starts the engine and opens the WebGL horror game in your browser:
+# Turn-key config: copy the template, then (optionally) paste your Anthropic key.
+cp .env.example .env                  # Windows:  copy .env.example .env
+#   edit .env -> ANTHROPIC_API_KEY=...   (leave blank to use the offline composer)
+
+# Play it — starts the engine and opens THE BACKROOMS in your browser:
 python run.py          # Windows / macOS / Linux
 #   ./run.sh           # macOS / Linux
 #   run.bat            # Windows (double-click)
 ```
+
+It runs **with or without** a key or a headset: no key → an offline composer;
+no headset → simulated fear. A key turns on the live Claude architect; a MindLink
+(click *Connect Mind Link*, enter the COM port) lets your brain drive the fear.
+Assets come from **keyless** open libraries (Poly Haven CC0 + CC0 packs) by default.
 
 Then move with **WASD / arrows**, look with the **mouse**, and drag the **fear
 slider** (or tick *Auto-escalate*) to watch the world turn from *unease* to
