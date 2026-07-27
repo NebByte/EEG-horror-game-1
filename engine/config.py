@@ -42,12 +42,14 @@ class Settings(BaseSettings):
     player_data_dir: str = "data/players"
 
     # --- Asset resolution (fresh assets every run) ---
-    # "procedural" -> infinite offline variants (default, no network)
-    # "libraries"  -> open-asset libraries (Poly Haven / Freesound / Sketchfab /
-    #                 CC0 packs), each falling back to procedural per asset kind
-    asset_source: str = "procedural"
-    # Which libraries to enable, in priority order (comma-separated).
-    asset_libraries: str = "polyhaven,freesound,sketchfab,cc0pack"
+    # "libraries"  -> open-asset libraries (default). Only the **keyless** sources
+    #                 (Poly Haven CC0 + curated CC0 packs) are enabled by default,
+    #                 each falling back to procedural per asset kind.
+    # "procedural" -> infinite offline variants, no network.
+    asset_source: str = "libraries"
+    # Enabled libraries, in priority order. Keyless by default; add "freesound"
+    # and/or "sketchfab" here once you set their API keys below.
+    asset_libraries: str = "polyhaven,cc0pack"
     freesound_api_key: str = ""
     sketchfab_api_key: str = ""
 

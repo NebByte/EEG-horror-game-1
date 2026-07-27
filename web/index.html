@@ -173,6 +173,7 @@
     Find <b>3 bottles of Almond Water</b> to stay sane, then reach the <b>Exit</b>.
     The <b>compass</b> at the top points to your goal. Something else wanders here —
     <b>keep it in your sight, for it cannot move while you watch it.</b>
+    If it catches you, you're gone.
     <div class="keys">
       <span class="key">W A S D — Move</span>
       <span class="key">Mouse — Look</span>
@@ -1561,7 +1562,7 @@ function updateMonsters(dt) {
     m.mesh.rotation.y = Math.atan2(player.x - m.x, player.z - m.z);
 
     const d = Math.hypot(m.x - player.x, m.z - player.z);
-    if (d < t.catch) { die(m); return; }
+    if (d < t.catch) { die(m); return; }                     // caught = death (the only way to die)
     if (d > 62 && !playerSees(m)) spawnMonster(m, 24, 44);   // recycle stragglers to keep pressure
   }
 }

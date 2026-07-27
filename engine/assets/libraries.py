@@ -19,7 +19,7 @@ from engine.assets.models import AssetKind, MediaAsset
 
 log = logging.getLogger("engine.assets.libraries")
 
-_HTTP_TIMEOUT = 12.0
+_HTTP_TIMEOUT = 6.0
 # Poly Haven's API ToS requires a unique, app-identifying User-Agent per caller.
 _USER_AGENT = "EEG-Horror-Engine/0.1 (+https://github.com/NebByte/EEG-horror-game-1)"
 
