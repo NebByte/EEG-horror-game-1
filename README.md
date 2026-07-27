@@ -193,6 +193,15 @@ Each asset kind is routed to the best-configured library and **falls back to
 procedural** per asset, so a missing key or blocked network never breaks a run.
 `GET /v1/sessions/{id}/assets/manifest` returns the attribution/licensing manifest.
 
+**Into the world.** The Poly Haven resolver turns each asset id into a *direct*
+download URL (it parses `/files/{id}` for the diffuse texture / glTF entry point
++ its includes), and the WebGL client (`web/index.html`) pulls them in: a fetched
+CC0 diffuse texture is applied to the walls and a downloadable glTF prop is placed
+in the maze (via the vendored `GLTFLoader`). Both are best-effort — any fetch /
+CORS / decode failure silently keeps the procedural art, so offline still works.
+Direct fetching from Poly Haven only happens when the browser can reach the
+network; it can't be exercised in a locked-down/CI sandbox.
+
 ### Drive the API by hand
 
 ```bash

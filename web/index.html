@@ -223,6 +223,7 @@ import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
 import { ShaderPass } from 'three/addons/postprocessing/ShaderPass.js';
 import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 
 /* ============================================================
    CONFIG
@@ -987,6 +988,94 @@ const MindLink = (() => {
 })();
 
 /* ============================================================
+   ASSET LOADER — pulls the engine's fetched open-library assets (Poly Haven
+   CC0) into the world: a real diffuse texture onto the walls, and a
+   downloadable glTF prop into the maze. Every step is best-effort — any
+   fetch / CORS / decode failure silently keeps the procedural art, so the
+   game never breaks when the engine or network is absent.
+============================================================ */
+const AssetLoader = (() => {
+  const texLoader = new THREE.TextureLoader();
+  texLoader.setCrossOrigin('anonymous');
+  let appliedTexId = null, modelObj = null, loadedModelId = null;
+
+  // Only genuine direct-media URLs — not catalog pages (Kenney/OpenGameArt
+  // pack URIs are human-facing links, and a viewer page isn't a loadable file).
+  const MEDIA_EXT = { image: /\.(jpe?g|png|webp)(\?|#|$)/i, model: /\.(gltf|glb)(\?|#|$)/i };
+  const loadable = (a, kind) =>
+    a && a.kind === kind && typeof a.uri === 'string'
+    && /^https?:\/\//.test(a.uri) && MEDIA_EXT[kind].test(a.uri);
+
+  // first asset of a kind that points at a loadable media file
+  function firstAsset(assets, kind) {
+    for (const list of Object.values(assets || {}))
+      for (const a of (list || []))
+        if (loadable(a, kind)) return a;
+    return null;
+  }
+
+  function applyTexture(asset) {
+    if (!asset || asset.id === appliedTexId) return;
+    texLoader.load(asset.uri, tex => {
+      tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = MAX_ANISO;
+      tex.repeat.set(1, 1);
+      const old = wallMat.map;
+      wallMat.map = tex; wallMat.needsUpdate = true;
+      if (old && old !== wallpaperTex) old.dispose();   // free the previous fetched tex
+      appliedTexId = asset.id;
+      console.info('[assets] wall texture ←', asset.name, asset.attribution || '');
+    }, undefined, () => {});   // on error: keep the procedural wallpaper
+  }
+
+  function disposeModel() {
+    if (!modelObj) return;
+    scene.remove(modelObj);
+    modelObj.traverse(o => { if (o.isMesh) { o.geometry.dispose();
+      (Array.isArray(o.material) ? o.material : [o.material]).forEach(m => m && m.dispose()); } });
+    modelObj = null;
+  }
+
+  function loadModel(asset) {
+    if (!asset || asset.id === loadedModelId) return;
+    loadedModelId = asset.id;                       // never retry the same id
+    const includes = (asset.params && asset.params.includes) || {};
+    const mgr = new THREE.LoadingManager();
+    // Poly Haven glTF is multi-file (.gltf + .bin + textures); rewrite each
+    // relative include to the absolute URL the engine already resolved.
+    mgr.setURLModifier(url => {
+      for (const rel of Object.keys(includes)) if (url.endsWith(rel)) return includes[rel];
+      return url;
+    });
+    const loader = new GLTFLoader(mgr);
+    loader.setCrossOrigin('anonymous');
+    loader.load(asset.uri, g => {
+      const obj = g.scene || (g.scenes && g.scenes[0]);
+      if (!obj) return;
+      disposeModel();                               // replace any prior prop
+      // normalise to ~2 m tall and stand it on the floor a short walk away
+      const size = new THREE.Vector3(); new THREE.Box3().setFromObject(obj).getSize(size);
+      obj.scale.setScalar(Math.min(4, Math.max(0.5, 2 / (size.y || 1))));
+      const box = new THREE.Box3().setFromObject(obj);
+      const [cx, cy] = randomOpenCell(0, 0, 8, 22);
+      obj.position.set(cellCenter(cx), -box.min.y, cellCenter(cy));
+      obj.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+      scene.add(obj); modelObj = obj;
+      console.info('[assets] prop model ←', asset.name, asset.attribution || '');
+    }, undefined, () => {});   // on error: keep the procedural props
+  }
+
+  function apply(script) {
+    const assets = script && script.assets;
+    if (!assets) return;
+    try { applyTexture(firstAsset(assets, 'image')); } catch (e) {}
+    try { loadModel(firstAsset(assets, 'model')); } catch (e) {}
+  }
+  return { apply };
+})();
+
+/* ============================================================
    ENGINE BRIDGE  — connects the game to our Python "brain":
    the Architect composes the Script (Claude/mock), escalation ramps the
    monsters, reactions train the learning/evolution layer, and — crucially —
@@ -1028,6 +1117,7 @@ const EngineBridge = (() => {
     const r = await fetch(base + '/v1/sessions/' + sid + '/script', { method: 'POST',
       headers: { 'content-type': 'application/json' }, body: JSON.stringify({ length: 8 }) });
     script = await jr(r); escalation = script.escalation || 0;
+    AssetLoader.apply(script);   // pull fetched CC0 textures/models into the world
   }
   async function newRun() { if (connected) { try { await compose(); } catch (e) {} } }
 

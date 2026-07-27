@@ -4,7 +4,8 @@ from __future__ import annotations
 
 from engine.assets.libraries import (Cc0PackLibrary, LibrarySource,
                                      _parse_freesound, _parse_polyhaven_assets,
-                                     _parse_sketchfab)
+                                     _parse_sketchfab, _polyhaven_hdri_url,
+                                     _polyhaven_model_files, _polyhaven_texture_url)
 from engine.assets.models import MediaAsset
 from engine.assets.resolver import license_manifest
 from engine.assets.sources import MultiLibrarySource, ProceduralAssetSource
@@ -55,6 +56,36 @@ def test_parsers():
     assert fs[0]["id"] == 1
     sk = _parse_sketchfab({"results": [{"uid": "abc", "name": "statue"}]})
     assert sk[0]["uid"] == "abc"
+
+
+def test_polyhaven_resolves_direct_urls_from_files_response():
+    # A /files response shaped like Poly Haven's: nested type -> res -> format.
+    tex_files = {
+        "Diffuse": {"1k": {"jpg": {"url": "https://dl/ph/diff_1k.jpg"},
+                           "png": {"url": "https://dl/ph/diff_1k.png"}},
+                    "2k": {"jpg": {"url": "https://dl/ph/diff_2k.jpg"}}},
+        "nor_gl": {"1k": {"jpg": {"url": "https://dl/ph/nor_1k.jpg"}}},
+    }
+    # smallest resolution, jpg preferred over png
+    assert _polyhaven_texture_url(tex_files) == "https://dl/ph/diff_1k.jpg"
+    # non-colour maps alone must not resolve as a colour texture
+    assert _polyhaven_texture_url({"nor_gl": tex_files["nor_gl"]}) is None
+
+    model_files = {
+        "gltf": {"1k": {"gltf": {"url": "https://dl/ph/statue_1k.gltf",
+                                 "include": {"statue_1k.bin": {"url": "https://dl/ph/statue_1k.bin"},
+                                             "textures/col.jpg": {"url": "https://dl/ph/col.jpg"}}}}},
+        "blend": {"1k": {"blend": {"url": "https://dl/ph/statue.blend"}}},
+    }
+    mf = _polyhaven_model_files(model_files)
+    assert mf["url"] == "https://dl/ph/statue_1k.gltf"
+    assert mf["includes"]["textures/col.jpg"] == "https://dl/ph/col.jpg"
+    assert _polyhaven_model_files({"blend": model_files["blend"]}) is None
+
+    assert _polyhaven_hdri_url({"tonemapped": {"url": "https://dl/ph/tm.jpg"}}) == "https://dl/ph/tm.jpg"
+    assert _polyhaven_hdri_url({"hdri": {"1k": {"hdr": {"url": "https://dl/ph/sky_1k.hdr"}}}}) \
+        == "https://dl/ph/sky_1k.hdr"
+    assert _polyhaven_texture_url({}) is None and _polyhaven_model_files(None) is None
 
 
 def test_license_manifest_dedups_and_skips_procedural():
